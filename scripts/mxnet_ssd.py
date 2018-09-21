@@ -11,17 +11,20 @@ from symbol.symbol_factory import get_symbol
 class MxNetSsdClassifier(object):
 
     # MXNet-based single-shot detector 
-    def __init__(self, model_name, model_directory, gpu_enabled):
+    def __init__(self, model_name, model_epoch, model_directory, batch_size=1, gpu_enabled=True, num_classes=20):
         self.ts_start=int(time.time())
 
         # setup MXNet detector
-        self.epoch = 75
-        class_names = 'goose, person, golfcart, lawnmower, dog'
+        self.epoch = model_epoch
         print model_name
         print model_directory
         self.prefix = str(model_directory) + str(model_name)
-        self.classes = [c.strip() for c in class_names.split(',')]
+        self.num_classes = num_classes
         self.batch = namedtuple('Batch', ['data'])
+        self.batch_size=batch_size
+        if (self.batch_size>1):
+            print('Warning, batch_size>1 is not supported, using batch size of 1')
+            self.batch_size=1
         if gpu_enabled:
             self.ctx = mxnet.gpu(0)
         else:
@@ -31,38 +34,40 @@ class MxNetSsdClassifier(object):
         self.mean_pixels=(123, 117,104)
         self._mean_pixels = mxnet.nd.array(self.mean_pixels).reshape((3,1,1))
         _, args, auxs = mxnet.model.load_checkpoint(self.prefix, self.epoch)
-        symbol = get_symbol('resnet50', 512, num_classes=len(self.classes))
+        symbol = get_symbol('resnet50', 512, num_classes=self.num_classes)
         self.mod = mxnet.mod.Module(symbol, context=self.ctx)
-        self.mod.bind(for_training=False, data_shapes=[('data', (1, 3, 512, 512))])
+        self.mod.bind(for_training=False, data_shapes=[('data', (self.batch_size, 3, 512, 512))])
         self.mod.set_params(args, auxs)
 
 
+    def detect(self, image, threshold):
+        dets=[]
+        # operate on list of images
+        if (type(image)!=type(list())):
+            image = [image]
+        for image_np_orig in image:
+            batch_data = mxnet.nd.zeros((self.batch_size, 3, 512, 512))
+            # image sizes for full image detection (top/bottom may have been cropped, use ycrop variable to determine)
+            (height, width) = (image_np.shape[0], image_np.shape[1])
+            data = mxnet.nd.array(image_np)
+            data = mxnet.img.imresize(data, 512, 512)
+            data = mxnet.nd.transpose(data, (2,0,1))
+            data = data.astype('float32')
+            data = data - self._mean_pixels
+            batch_data[0]=data
+            self.mod.forward(self.batch([batch_data]))
+            outputs=self.mod.get_outputs()[0].asnumpy()
+            delta_time=int(time.time())-self.ts_start
 
-    def detect(self, image_np, threshold):
-        image_np_orig=image_np
+            # with batch size of 1, use the zeroth index
+            outputs=outputs[0,:,:]
 
-        batch_data = mxnet.nd.zeros((1, 3, 512, 512))
-        # image sizes for full image detection (top/bottom may have been cropped, use ycrop variable to determine)
-        (height, width) = (image_np.shape[0], image_np.shape[1])
-        data = mxnet.nd.array(image_np)
-        data = mxnet.img.imresize(data, 512, 512)
-        data = mxnet.nd.transpose(data, (2,0,1))
-        data = data.astype('float32')
-        data = data - self._mean_pixels
-        batch_data[0]=data
-        self.mod.forward(self.batch([batch_data]))
-        outputs=self.mod.get_outputs()[0].asnumpy()
-        delta_time=int(time.time())-self.ts_start
+            # loop over batch
+            # get rid of -1 classes
+            detections = outputs[np.where(outputs[:, 0] >= 0)[0]]
 
-        # with batch size of 1, use the zeroth index
-        outputs=outputs[0,:,:]
+            # get rid of below-thresh detections
+            dets.append(detections[np.where(detections[:, 1] >= threshold)[0]])
 
-        # loop over batch
-        # get rid of -1 classes
-        detections = outputs[np.where(outputs[:, 0] >= 0)[0]]
-
-        # get rid of below-thresh detections
-        dets= detections[np.where(detections[:, 1] >= threshold)[0]]
-
-        return image_np_orig,dets
+        return dets
 
