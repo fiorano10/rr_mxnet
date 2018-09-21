@@ -11,6 +11,12 @@ from cv_bridge import CvBridge, CvBridgeError
 from mxnet_ssd import MxNetSSDClassifier
 from mxnet_ssd_custom_functions import SSDCropPattern
 
+# debugging
+import cv2
+#import matplotlib.pylab as plt
+#plt.ion()
+#plt.figure()
+
 class RosMxNetSSD:
 
     def __init__(self):
@@ -22,15 +28,17 @@ class RosMxNetSSD:
         self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
         #self.image_topic = self.load_param('~image_topic', '/img')
         self.detections_topic = self.load_param('~detections_topic', '/rr_mxnet/detections')
-        self.publish_detection_images = self.load_param('~publish_detection_images', 'false')
+        self.publish_detection_images = self.load_param('~publish_detection_images', False)
         self.image_detections_topic = self.load_param('~image_detections_topic', '/rr_mxnet/image')
-        self.timer = self.load_param('~throttle_timer', 5)
+        self.timer = self.load_param('~throttle_timer', 1)
         self.threshold = self.load_param('~threshold', 0.5)
-        self.start_enabled = self.load_param('~start_enabled ', 'false')
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', 'false')
+        #self.start_enabled = self.load_param('~start_enabled ', False)
+        self.start_enabled = self.load_param('~start_enabled ', True)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
+        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
 
         # crop pattern
-        self.level0_ncrops = self.load_param('~level0_ncrops',1)
+        self.level0_ncrops = self.load_param('~level0_ncrops',2)
         self.level1_xcrops = self.load_param('~level1_xcrops',0)
         self.level1_ycrops = self.load_param('~level1_ycrops',0)
         self.level1_crop_size = self.load_param('~level1_crop_size',300)
@@ -40,12 +48,12 @@ class RosMxNetSSD:
         self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
         self.model_directory = self.load_param('~model_directory', '/home/ebeall/mxnet_ssd/')
         self.model_epoch = self.load_param('~model_epoch', 1)
-        self.enable_gpu = self.load_param('~enable_gpu', 'false')
+        self.enable_gpu = self.load_param('~enable_gpu', True)
         '''
         self.model_name = self.load_param('~model_name','ssd_resnet50_512')
         self.model_directory = self.load_param('~model_directory', '/home/ebeall/mxnet/example/ssd/model')
         self.model_epoch = self.load_param('~model_epoch', 75)
-        self.enable_gpu = self.load_param('~enable_gpu', 'true')
+        self.enable_gpu = self.load_param('~enable_gpu', False)
         self.num_classes = self.load_param('~num_classes',5)
         self.batch_size = self.load_param('~batch_size',1)
 
@@ -56,15 +64,13 @@ class RosMxNetSSD:
 
         # COMING SOON SECTION
         # save detections output and location
-        #self.save_detections = self.load_param('~save_detections', 'false')
+        #self.save_detections = self.load_param('~save_detections', False)
         #self.save_directory = self.load_param('~save_directory', '/tmp')
         #self.mask_topic = self.load_param('~mask_topic', '/img_segmentations')
 
         # Class Variables
         self.detection_seq = 0
         self.camera_frame = "camera_frame"
-        print self.model_name
-        print self.model_directory
         self.classifier = MxNetSSDClassifier(self.model_name, self.model_epoch, self.model_directory, self.batch_size, self.enable_gpu, self.num_classes)
         self.imageprocessor = SSDCropPattern(self.zoom_enabled, self.level0_ncrops, self.level1_xcrops, self.level1_ycrops, self.level1_crop_size)
         self.last_detection_time = 0     
@@ -127,20 +133,23 @@ class RosMxNetSSD:
                     frame=np.asarray(cv2_img).copy()
 
                     # get list of crops, encode image into the specified crop pattern if zoom is enabled
-                    framelist = self.imageprocessor.crop(frame)
+                    framelist = self.imageprocessor.encode_crops(frame)
 
-                    # pass all frame crops to classifier
-                    all_detections=self.classifier.detect(framelist, self.threshold)
+                    # pass all frame crops to classifier, returns a list of detections, or a list of zeros if nothing detected in a crop
+                    # e.g. every crop gets a detection array added to the list
+                    list_of_crop_detections,num_detections = self.classifier.detect(framelist, self.threshold)
 
                     # decode the detections list for the encoded crop pattern into original image locations
-                    detectionlist = self.imageprocessor.decode_crops(all_detections)
+                    list_of_full_image_detections = self.imageprocessor.decode_crops(list_of_crop_detections)
 
-                    if (len(detectionlist)==0):
+                    # if there are no detections, continue
+                    '''
+                    if num_detections==0:
                         return
 
-                    print detectionlist
+                    print list_of_full_image_detections
                     # package up the list of detections as a message
-                    detections_msg = self.encode_detection_msg(detectionlist)
+                    detections_msg = self.encode_detection_msg(list_of_full_image_detections)
 
                     print detections_msg
                     self.pub_detections.publish(detections_msg)
@@ -148,11 +157,18 @@ class RosMxNetSSD:
                     # if specified, publish images with bounding boxes if detections present
                     if (self.publish_detection_images):
                         # overlay detections on the frame
-                        frame = self.imageprocessor.overlay_detections(frame, detectionlist)
+                        frame = self.imageprocessor.overlay_detections(frame, list_of_full_image_detections)
                         try:
                             self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "bgr8"))
                         except CvBridgeError as e:
                             print(e)
+                    '''
+
+                    # debugging
+                    frame = self.imageprocessor.overlay_detections(frame, list_of_full_image_detections)
+                    cv2.imwrite('frame.jpg',frame)
+                    for i in range(0,len(framelist)):
+                        cv2.imwrite('frame'+str(i)+'.jpg',framelist[i])
 
                 except CvBridgeError, e:
                     rospy.logerr(e)
