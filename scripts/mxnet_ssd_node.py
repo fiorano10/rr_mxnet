@@ -31,7 +31,7 @@ class RosMxNetSSD:
         self.level1_crop_size = self.load_param('~level1_crop_size',300)
         
         # location of mxnet model and name, epoch, GPU and number of classes
-        self.model_name = self.load_param('~model_name','mobilenet-ssd')
+        self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
         self.model_directory = self.load_param('~model_directory', '~/mxnet_ssd/')
         self.model_epoch = self.load_param('~model_epoch', '1')
         self.enable_gpu = self.load_param('~enable_gpu', 'false')
