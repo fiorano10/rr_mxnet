@@ -8,7 +8,7 @@ from collections import namedtuple
 from symbol.symbol_factory import get_symbol
 
 
-class MxNetSsdClassifier(object):
+class MxNetSSDClassifier(object):
 
     # MXNet-based single-shot detector 
     def __init__(self, model_name, model_epoch, model_directory, batch_size=1, gpu_enabled=True, num_classes=20):
@@ -18,7 +18,7 @@ class MxNetSsdClassifier(object):
         self.epoch = model_epoch
         print model_name
         print model_directory
-        self.prefix = str(model_directory) + str(model_name)
+        self.prefix = str(model_directory) + '/' + str(model_name)
         self.num_classes = num_classes
         self.batch = namedtuple('Batch', ['data'])
         self.batch_size=batch_size
@@ -45,7 +45,7 @@ class MxNetSsdClassifier(object):
         # operate on list of images
         if (type(image)!=type(list())):
             image = [image]
-        for image_np_orig in image:
+        for image_np in image:
             batch_data = mxnet.nd.zeros((self.batch_size, 3, 512, 512))
             # image sizes for full image detection (top/bottom may have been cropped, use ycrop variable to determine)
             (height, width) = (image_np.shape[0], image_np.shape[1])
@@ -68,6 +68,7 @@ class MxNetSsdClassifier(object):
 
             # get rid of below-thresh detections
             dets.append(detections[np.where(detections[:, 1] >= threshold)[0]])
+            # detections are in form [cls, prob, xmin, ymin, xmax, ymax]
 
         return dets
 
