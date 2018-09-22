@@ -38,9 +38,9 @@ class RosMxNetSSD:
         #self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
 
         # crop pattern
-        self.level0_ncrops = self.load_param('~level0_ncrops',2)
-        self.level1_xcrops = self.load_param('~level1_xcrops',0)
-        self.level1_ycrops = self.load_param('~level1_ycrops',0)
+        self.level0_ncrops = self.load_param('~level0_ncrops',3)
+        self.level1_xcrops = self.load_param('~level1_xcrops',5)
+        self.level1_ycrops = self.load_param('~level1_ycrops',2)
         self.level1_crop_size = self.load_param('~level1_crop_size',300)
         
         # location of mxnet model and name, epoch, GPU and number of classes
@@ -166,9 +166,9 @@ class RosMxNetSSD:
 
                     # debugging
                     frame = self.imageprocessor.overlay_detections(frame, list_of_full_image_detections)
-                    cv2.imwrite('frame.jpg',frame)
+                    cv2.imwrite('frame.jpg',frame[:,:,[2,1,0]])
                     for i in range(0,len(framelist)):
-                        cv2.imwrite('frame'+str(i)+'.jpg',framelist[i])
+                        cv2.imwrite('frame'+str(i)+'.jpg',framelist[i][:,:,[2,1,0]])
 
                 except CvBridgeError, e:
                     rospy.logerr(e)

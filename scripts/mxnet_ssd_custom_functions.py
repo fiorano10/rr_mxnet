@@ -4,6 +4,7 @@ import sys
 import os
 import numpy as np
 import cv2
+import itertools
 
 class SSDCropPattern():
     def __init__(self, zoom_enabled, level0_ncrops, level1_xcrops, level1_ycrops, level1_crop_size):
@@ -50,12 +51,6 @@ class SSDCropPattern():
         return detection_array
 
     def adjust_inner_box(self, detection_array,xdim, ydim, min_dim_pct, offset):
-        '''
-        print ' ***** adjust_inner_box *****'
-        print detection_array
-        print detection_array.shape
-        print ''
-        '''
         if len(detection_array)==0:
             return
         for i in range(0,len(detection_array)):
@@ -65,12 +60,6 @@ class SSDCropPattern():
             elif (xdim<ydim):
                 detection_array[i,3]=offset + min_dim_pct * detection_array[i,3]
                 detection_array[i,5]=offset + min_dim_pct * detection_array[i,5]
-        '''
-        print ' ***** after adjust_inner_box *****'
-        print detection_array
-        print detection_array.shape
-        print ''
-        '''
 
     def decode_crops(self,all_detections):
         if (self.data_shape is None):
@@ -80,49 +69,60 @@ class SSDCropPattern():
         if (self.zoom_changed and self.encode_decode==0):
             self.zoom_changed=False
             self.zoom_enabled=self.zoom_set_tmp
+
         # decode the crops back to original image
-        detectionslist=[]
+        pct_indices=self.get_crop_location_pcts()
+        if (len(all_detections) != len(pct_indices)):
+            print('WARNING, crop pattern (len='+str(len(pct_indices))+') does not match detections (len='+str(len(all_detections))+')')
         ydim,xdim=self.data_shape[0:2]
-        min_dim=np.min(self.data_shape[0:2])
-        max_dim=np.max(self.data_shape[0:2])
-        min_dim_pct=float(min_dim)/max_dim
-        print ' ***** decode_crops all dets *****'
-        print all_detections
-        print len(all_detections)
-        print all_detections[0].shape
-        print ''
-        # First-level crop pattern:
-        if (self.level0_ncrops==0):
-            # no change if resized
-            return all_detections
-        elif (self.level0_ncrops==1 or not self.zoom_enabled):
-            # center-crop, expand out to full image size
-            offset_pct=0.5*(1-min_dim_pct)
-            # new x value (xmin or xmax) = offset_pct+min_dim_pct*x
-            self.adjust_inner_box(all_detections[0],xdim, ydim, min_dim_pct, offset_pct)
-        elif (self.level0_ncrops>1):
-            # set offsets on linear spaced pattern from 0 to 1.0-cropsize_pct in percent
-            offsets=np.linspace(0,1.0-min_dim_pct, self.level0_ncrops)
-            for i in range(0,self.level0_ncrops):
-                self.adjust_inner_box(all_detections[i],xdim, ydim, min_dim_pct, offsets[i])
+        for i in range(0,len(pct_indices)):
+            xc,yc,w,h=pct_indices[i,:]
+            x1=max(xc-w/2,0.0)
+            y1=max(yc-h/2,0.0)
+            # rebox the detections into the innerbox xc[i]-w[i]/2.0:xc[i]+w[i]/2.0
+            for j in range(0,len(all_detections[i])):
+                all_detections[i][j,2]=all_detections[i][j,2]*w + x1
+                all_detections[i][j,3]=all_detections[i][j,2]*h + y1
+                all_detections[i][j,4]=all_detections[i][j,4]*w + x1
+                all_detections[i][j,5]=all_detections[i][j,5]*h + y1
 
-        # Second-level crop pattern:
-        if (self.level1_xcrops>0 or self.level1_ycrops>0 and self.zoom_enabled):
-            # set centroids on linear spaced pattern from 0 to 1-crop_pct
-            xoffsets=np.linspace(0,1.0-float(self.level1_crop_size)/xdim, self.level1_xcrops)
-            yoffsets=np.linspace(0,1.0-float(self.level1_crop_size)/ydim, self.level1_ycrops)
-            for i in range(0,self.level1_xcrops):
-                for j in range(0,self.level1_ycrops):
-                    for detection_array in all_detections[j+(i*self.level1_ycrops)]:
-                        self.adjust_inner_box_level1(detection_array,xdim, ydim, self.level1_crop_size, xoffsets[i], yoffsets[j])
-
-        #print ' ***** after adjust_inner_box *****'
-        #print all_detections
-        #print ''
 
         # decrement the encode_decode back to zero
         self.encode_decode = self.encode_decode - 1
         return all_detections
+
+    # create lists containing the box centers and the box sizes in pcts = xc,yc,w,h
+    def get_crop_location_pcts(self):
+        if (self.level0_ncrops==0):
+            return [0.0],[0.0],[1.0],[1.0]
+        ydim,xdim=self.data_shape[0:2]
+        min_dim=np.min(self.data_shape[0:2])
+        max_dim=np.max(self.data_shape[0:2])
+        # First-level crop pattern
+        xcrop_pct = float(min_dim)/xdim
+        ycrop_pct = float(min_dim)/ydim
+        xc0=np.linspace(0.5*xcrop_pct,1.0-0.5*xcrop_pct, self.level0_ncrops)
+        yc0=np.linspace(0.5*ycrop_pct,1.0-0.5*ycrop_pct, self.level0_ncrops)
+        w0=np.asarray([xcrop_pct]*len(xc0))
+        h0=np.asarray([ycrop_pct]*len(yc0))
+        pct_indices0=np.asarray([[a,b,c,d] for a,b,c,d in zip(xc0,yc0,w0,h0)])
+        # determine the overlap percentages
+
+        # Second-level crop pattern - if xcrops or ycrops are 0, then those lists will be zero length
+        xcrop_pct = float(self.level1_crop_size)/xdim
+        ycrop_pct = float(self.level1_crop_size)/ydim
+        xc=np.linspace(0.5*xcrop_pct,1.0-0.5*xcrop_pct, self.level1_xcrops)
+        yc=np.linspace(0.5*ycrop_pct,1.0-0.5*ycrop_pct, self.level1_ycrops)
+        w=np.asarray([xcrop_pct]*len(xc))
+        h=np.asarray([ycrop_pct]*len(yc))
+        # these have to be replicated combinatorically and zipped so we have the total possibilities of xc,yc and same for w,h
+        pct_indices1=np.asarray([[i[0][0],i[0][1],i[1][0],i[1][1]] for i in zip(list(itertools.product(xc,yc, repeat=1)),list(itertools.product(w,h, repeat=1)))])
+
+        # stack the levels if zoom is set and non-zero length of crop lists
+        if (self.zoom_enabled and len(xc)>0 and len(yc)>0):
+            pct_indices0=np.vstack((pct_indices0,pct_indices1))
+
+        return pct_indices0
 
     def encode_crops(self,frame):
         self.data_shape=frame.shape
@@ -134,51 +134,21 @@ class SSDCropPattern():
 
         # making a list of crops
         framelist=[]
-        # If zoom is not enabled, just pass the first-level n_crops==0 or 1 (resize to square or center crop)
-        if (not self.zoom_enabled):
-            if (self.level0_ncrops==0):
-                framelist.append(cv2.resize(frame,(min_dim,min_dim)))
-            else:
-                # center crop to square along the larger dimension (note, if dims are equal, do nothing)
-                if (xdim > ydim):
-                    framelist.append(frame[:,(max_dim-min_dim)/2:-(max_dim-min_dim)/2,:])
-                elif (xdim < ydim):
-                    framelist.append(frame[(max_dim-min_dim)/2:-(max_dim-min_dim)/2,:,:])
+        # If level0_ncrops==0, resize to square and return
+        if (self.level0_ncrops==0):
+            framelist.append(cv2.resize(frame,(min_dim,min_dim)))
             return framelist
 
-        # Decision tree for crop-pattern
-        # First-level crop pattern:
-        if (self.level0_ncrops==0):
-            # resize to square
-            framelist.append(cv2.resize(frame,(min_dim,min_dim)))
-        elif (self.level0_ncrops==1):
-            # center crop to square along the larger dimension (note, if dims are equal, do nothing)
-            if (ydim < xdim):
-                framelist.append(frame[:,(max_dim-min_dim)/2:-(max_dim-min_dim)/2,:])
-            elif (xdim < ydim):
-                framelist.append(frame[(max_dim-min_dim)/2:-(max_dim-min_dim)/2,:,:])
-        elif (self.level0_ncrops>1):
-            # crop along larger dimension with ncrops - use the half-crop width (minimum dimension/2) 
-            half_crop=int(round(min_dim/2.0))
-            # set centroids on linear spaced pattern from half_crop to end-half_crop
-            centroids=map(int,np.linspace(half_crop,max_dim-half_crop, self.level0_ncrops))
-            print half_crop
-            print centroids
-            for i in range(0,self.level0_ncrops):
-                if (ydim < xdim):
-                    framelist.append(np.copy(frame[:,centroids[i]-half_crop:centroids[i]+half_crop,:]))
-                elif (ydim < xdim):
-                    framelist.append(np.copy(frame[centroids[i]-half_crop:centroids[i]+half_crop,:,:]))
+        # otherwise, loop over the crop indices and add to framelist
+        pct_indices=self.get_crop_location_pcts()
+        ydim,xdim=self.data_shape[0:2]
+        for i in range(0,len(pct_indices)):
+            xc,yc,w,h=pct_indices[i,:]
+            x1=max(int((xc-w/2)*xdim),0)
+            y1=max(int((yc-h/2)*ydim),0)
+            x2=min(int((xc+w/2)*xdim),xdim)
+            y2=min(int((yc+h/2)*ydim),ydim)
+            framelist.append(np.copy(frame[y1:y2,x1:x2,:]))
 
-        # Second-level crop pattern:
-        if (self.level1_xcrops>0 or self.level1_ycrops>0):
-            # get half crop sizes
-            half_crop=int(round(self.level1_crop_size/2.0))
-            # set centroids on linear spaced pattern from half_crop to end-half_crop
-            xcentroids=map(int,np.linspace(half_crop,xdim-half_crop, self.level1_xcrops))
-            ycentroids=map(int,np.linspace(half_crop,ydim-half_crop, self.level1_ycrops))
-            for i in range(0,self.level1_xcrops):
-                for j in range(0,self.level1_ycrops):
-                    framelist.append(np.copy(frame[ycentroids[i]-half_crop:ycentroids[i]+half_crop,xcentroids[i]-half_crop:xcentroids[i]+half_crop,:]))
         return framelist
 

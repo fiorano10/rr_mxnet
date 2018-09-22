@@ -46,7 +46,7 @@ class MxNetSSDClassifier(object):
         # operate on list of images
         if (type(image)!=type(list())):
             image = [image]
-        print str([img.shape for img in image])
+        #print str([img.shape for img in image])
         for image_np in image:
             batch_data = mxnet.nd.zeros((self.batch_size, 3, 512, 512))
             # image sizes for full image detection (top/bottom may have been cropped, use ycrop variable to determine)
@@ -73,13 +73,6 @@ class MxNetSSDClassifier(object):
             dets.append(detections)
             num_detections=num_detections+detections.shape[0]
 
-        '''
-        print ' **** mxnet ****'
-        print dets
-        print detections[np.where(detections[:, 1] >= threshold)[0]].shape
-        print ''
-        '''
         # detections are in form [[cls, prob, xmin, ymin, xmax, ymax]]
-
         return dets,num_detections
 
