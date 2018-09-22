@@ -71,7 +71,7 @@ class SSDCropPattern():
             self.zoom_enabled=self.zoom_set_tmp
 
         # decode the crops back to original image
-        pct_indices=self.get_crop_location_pcts()
+        pct_indices=self.get_crop_location_pcts(report_overlaps=False)
         if (len(all_detections) != len(pct_indices)):
             print('WARNING, crop pattern (len='+str(len(pct_indices))+') does not match detections (len='+str(len(all_detections))+')')
         ydim,xdim=self.data_shape[0:2]
@@ -92,9 +92,11 @@ class SSDCropPattern():
         return all_detections
 
     # create lists containing the box centers and the box sizes in pcts = xc,yc,w,h
-    def get_crop_location_pcts(self):
+    def get_crop_location_pcts(self,report_overlaps=False, data_shape=(480,640,3)):
         if (self.level0_ncrops==0):
             return [0.0],[0.0],[1.0],[1.0]
+        if (report_overlaps):
+            self.data_shape=data_shape
         ydim,xdim=self.data_shape[0:2]
         min_dim=np.min(self.data_shape[0:2])
         max_dim=np.max(self.data_shape[0:2])
@@ -107,6 +109,11 @@ class SSDCropPattern():
         h0=np.asarray([ycrop_pct]*len(yc0))
         pct_indices0=np.asarray([[a,b,c,d] for a,b,c,d in zip(xc0,yc0,w0,h0)])
         # determine the overlap percentages
+        if (report_overlaps):
+            if (self.level0_ncrops>1):
+                level0_overlap = 1.0 - (max(abs(xc0[0]-xc0[1]),abs(yc0[0]-yc0[1]))/min(xcrop_pct,ycrop_pct))
+            else:
+                level0_overlap = 0.0
 
         # Second-level crop pattern - if xcrops or ycrops are 0, then those lists will be zero length
         xcrop_pct = float(self.level1_crop_size)/xdim
@@ -117,10 +124,21 @@ class SSDCropPattern():
         h=np.asarray([ycrop_pct]*len(yc))
         # these have to be replicated combinatorically and zipped so we have the total possibilities of xc,yc and same for w,h
         pct_indices1=np.asarray([[i[0][0],i[0][1],i[1][0],i[1][1]] for i in zip(list(itertools.product(xc,yc, repeat=1)),list(itertools.product(w,h, repeat=1)))])
+        #
+        if (report_overlaps):
+            if (self.level1_xcrops>1 or self.level1_ycrops>1):
+                level1_xoverlap = 1.0 - (abs(xc[0]-xc[1])/xcrop_pct)
+                level1_yoverlap = 1.0 - (abs(yc[0]-yc[1])/ycrop_pct)
+            else:
+                level1_xoverlap = 0.0
+                level1_yoverlap = 0.0
 
         # stack the levels if zoom is set and non-zero length of crop lists
         if (self.zoom_enabled and len(xc)>0 and len(yc)>0):
             pct_indices0=np.vstack((pct_indices0,pct_indices1))
+
+        if (report_overlaps):
+            return pct_indices0, level0_overlap, level1_xoverlap, level1_yoverlap
 
         return pct_indices0
 
@@ -140,7 +158,7 @@ class SSDCropPattern():
             return framelist
 
         # otherwise, loop over the crop indices and add to framelist
-        pct_indices=self.get_crop_location_pcts()
+        pct_indices=self.get_crop_location_pcts(report_overlaps=False)
         ydim,xdim=self.data_shape[0:2]
         for i in range(0,len(pct_indices)):
             xc,yc,w,h=pct_indices[i,:]

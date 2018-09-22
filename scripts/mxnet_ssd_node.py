@@ -85,6 +85,11 @@ class RosMxNetSSD:
         self.pub_detections=rospy.Publisher(self.detections_topic, Detection2DArray, queue_size=10)
         if (self.publish_detection_images):
             self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
+        
+        pct_indices,level0_overlap, level1_xoverlap, level1_yoverlap=self.imageprocessor.get_crop_location_pcts(report_overlaps=True)
+        print level0_overlap
+        print level1_xoverlap
+        print level1_yoverlap
 
     def load_param(self, param, default=None):
         new_param = rospy.get_param(param, default)
