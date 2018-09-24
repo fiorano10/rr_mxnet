@@ -28,7 +28,8 @@ class RosMxNetSSD:
         self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
         #self.image_topic = self.load_param('~image_topic', '/img')
         self.detections_topic = self.load_param('~detections_topic', '/rr_mxnet/detections')
-        self.publish_detection_images = self.load_param('~publish_detection_images', False)
+        self.publish_detection_images = self.load_param('~publish_detection_images', True)
+        #self.publish_detection_images = self.load_param('~publish_detection_images', False)
         self.image_detections_topic = self.load_param('~image_detections_topic', '/rr_mxnet/image')
         self.timer = self.load_param('~throttle_timer', 1)
         self.threshold = self.load_param('~threshold', 0.5)
@@ -87,9 +88,7 @@ class RosMxNetSSD:
             self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
         
         pct_indices,level0_overlap, level1_xoverlap, level1_yoverlap=self.imageprocessor.get_crop_location_pcts(report_overlaps=True)
-        print level0_overlap
-        print level1_xoverlap
-        print level1_yoverlap
+        rospy.loginfo("[MxNet] Overlap level0: %.2f, level1: %.2fx%.2f", level0_overlap, level1_xoverlap, level1_yoverlap)
 
     def load_param(self, param, default=None):
         new_param = rospy.get_param(param, default)
@@ -127,6 +126,7 @@ class RosMxNetSSD:
                 detections_msg.detections.append(detection)
                 i+=1
         self.detection_seq += 1
+        return detections_msg
 
     def image_cb(self, image):
         if self.start_enabled:
@@ -145,35 +145,25 @@ class RosMxNetSSD:
                     list_of_crop_detections,num_detections = self.classifier.detect(framelist, self.threshold)
 
                     # decode the detections list for the encoded crop pattern into original image locations
-                    list_of_full_image_detections = self.imageprocessor.decode_crops(list_of_crop_detections)
+                    decoded_image_detections = self.imageprocessor.decode_crops(list_of_crop_detections)
 
                     # if there are no detections, continue
-                    '''
                     if num_detections==0:
                         return
 
-                    print list_of_full_image_detections
                     # package up the list of detections as a message
-                    detections_msg = self.encode_detection_msg(list_of_full_image_detections)
+                    detections_msg = self.encode_detection_msg(decoded_image_detections)
 
-                    print detections_msg
                     self.pub_detections.publish(detections_msg)
 
                     # if specified, publish images with bounding boxes if detections present
                     if (self.publish_detection_images):
                         # overlay detections on the frame
-                        frame = self.imageprocessor.overlay_detections(frame, list_of_full_image_detections)
+                        frame = self.imageprocessor.overlay_detections(frame, decoded_image_detections)
                         try:
                             self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "bgr8"))
                         except CvBridgeError as e:
                             print(e)
-                    '''
-
-                    # debugging
-                    frame = self.imageprocessor.overlay_detections(frame, list_of_full_image_detections)
-                    cv2.imwrite('frame.jpg',frame[:,:,[2,1,0]])
-                    for i in range(0,len(framelist)):
-                        cv2.imwrite('frame'+str(i)+'.jpg',framelist[i][:,:,[2,1,0]])
 
                 except CvBridgeError, e:
                     rospy.logerr(e)

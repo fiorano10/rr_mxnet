@@ -33,33 +33,78 @@ class SSDCropPattern():
 
 
     # draw detections (must have been decoded if using any crop)
-    def overlay_detections(self,frame, detectionlist):
-        # each detection may be blank or it may be a 2D array of detections
-        for detarray in detectionlist:
-            if (len(detarray)==0):
-                continue
-            # else draw detection box with one of 7 unique colors (modulo if number of classes is greater than 7)
-            for det in detarray:
-                pt1=(int(det[2]*self.data_shape[1]),int(det[3]*self.data_shape[0]))
-                pt2=(int(det[4]*self.data_shape[1]),int(det[5]*self.data_shape[0]))
-                cv2.rectangle(frame, pt1, pt2, self.COLORS[int(det[0]) % len(self.COLORS)],2)
+    def overlay_detections(self,frame, detarray):
+        # draw detection box with one of 7 unique colors (modulo if number of classes is greater than 7)
+        for det in detarray:
+            pt1=(int(det[2]*self.data_shape[1]),int(det[3]*self.data_shape[0]))
+            pt2=(int(det[4]*self.data_shape[1]),int(det[5]*self.data_shape[0]))
+            cv2.rectangle(frame, pt1, pt2, self.COLORS[int(det[0]) % len(self.COLORS)],2)
         return frame
 
-    # helper function to apply an offset (percentage) and crop size (percentage) to elements in a given detection array
-    # modify in-place (lists are passed by reference in python
-    def adjust_inner_box_level1(self, detection_array,xdim, ydim, min_dim_pct, xoffset, yoffset):
-        return detection_array
+    def iou(self, x, ys):
+            """
+            Calculate intersection-over-union overlap
+            Params:
+            ----------
+            x : numpy.array
+                single box [xmin, ymin ,xmax, ymax]
+            ys : numpy.array
+                multiple box [[xmin, ymin, xmax, ymax], [...], ]
+            Returns:
+            -----------
+            numpy.array
+                [iou1, iou2, ...], size == ys.shape[0]
+            """
+            ixmin = np.maximum(ys[:, 0], x[0])
+            iymin = np.maximum(ys[:, 1], x[1])
+            ixmax = np.minimum(ys[:, 2], x[2])
+            iymax = np.minimum(ys[:, 3], x[3])
+            iw = np.maximum(ixmax - ixmin, 0.)
+            ih = np.maximum(iymax - iymin, 0.)
+            inters = iw * ih
+            uni = (x[2] - x[0]) * (x[3] - x[1]) + (ys[:, 2] - ys[:, 0]) * \
+                (ys[:, 3] - ys[:, 1]) - inters
+            ious = inters / uni
+            ious[uni < 1e-12] = 0  # in case bad boxes
+            return ious
 
-    def adjust_inner_box(self, detection_array,xdim, ydim, min_dim_pct, offset):
-        if len(detection_array)==0:
-            return
-        for i in range(0,len(detection_array)):
-            if (xdim>ydim):
-                detection_array[i,2]=offset + min_dim_pct * detection_array[i,2]
-                detection_array[i,4]=offset + min_dim_pct * detection_array[i,4]
-            elif (xdim<ydim):
-                detection_array[i,3]=offset + min_dim_pct * detection_array[i,3]
-                detection_array[i,5]=offset + min_dim_pct * detection_array[i,5]
+    def prune_overlapping_boxes(self, list_of_all_detections):
+        # takes in list containing the detections, for each crop location.
+        # returns all_detections nparray of pruned detectections arrays
+        # note, all_detections is not a list anymore after this function
+        keep_inds=[]
+        # convert to sparse list of only detections made in crops
+        all_detections=np.zeros((0,6))
+        for i in range(0,len(list_of_all_detections)):
+            detections=list_of_all_detections[i]
+            if len(detections)>0:
+                all_detections=np.vstack((all_detections,detections))
+
+        # if detections, loop over boxes, find those with any non-negligible overlap, and prune all but the one with largest metric
+        if (len(all_detections)>0):
+            areas=(all_detections[:,4]-all_detections[:,2])*(all_detections[:,5]-all_detections[:,3])
+            probs=all_detections[:,1]
+            metric=areas*probs*probs
+            discard_inds=[]
+            for i in range(0,len(all_detections)):
+                # get overlap between each box here and all other boxes
+                ious=self.iou(1000.0*all_detections[i,2:],1000.0*all_detections[:,2:])
+                # check if the class matches for the overlapping boxes
+                # if different class, set the iou to zero so we keep them both
+                ious[np.where(all_detections[:,0] != all_detections[i,0])]=0.0
+                # take only those with IOU greater than 1%
+                inds_to_prune_over=np.asarray(np.where(ious>0.01))
+                # find the "best" one and prune the others
+                discard_inds.extend(inds_to_prune_over[np.where(metric[inds_to_prune_over]!=np.max(metric[inds_to_prune_over]))])
+
+            discard_inds=np.asarray(discard_inds).flatten()
+            discard_inds=np.unique(discard_inds)
+            keep_inds=np.asarray(np.setxor1d(range(0,len(all_detections)),discard_inds),dtype=np.int)
+
+        if (len(keep_inds)>0):
+            all_detections=all_detections[keep_inds,:]
+
+        return all_detections
 
     def decode_crops(self,all_detections):
         if (self.data_shape is None):
@@ -77,15 +122,17 @@ class SSDCropPattern():
         ydim,xdim=self.data_shape[0:2]
         for i in range(0,len(pct_indices)):
             xc,yc,w,h=pct_indices[i,:]
-            x1=max(xc-w/2,0.0)
-            y1=max(yc-h/2,0.0)
+            x1=max(xc-(w/2),0.0)
+            y1=max(yc-(h/2),0.0)
             # rebox the detections into the innerbox xc[i]-w[i]/2.0:xc[i]+w[i]/2.0
             for j in range(0,len(all_detections[i])):
                 all_detections[i][j,2]=all_detections[i][j,2]*w + x1
-                all_detections[i][j,3]=all_detections[i][j,2]*h + y1
+                all_detections[i][j,3]=all_detections[i][j,3]*h + y1
                 all_detections[i][j,4]=all_detections[i][j,4]*w + x1
                 all_detections[i][j,5]=all_detections[i][j,5]*h + y1
 
+        # prune overlapping boxes with same class id
+        all_detections=self.prune_overlapping_boxes(all_detections)
 
         # decrement the encode_decode back to zero
         self.encode_decode = self.encode_decode - 1
@@ -162,11 +209,12 @@ class SSDCropPattern():
         ydim,xdim=self.data_shape[0:2]
         for i in range(0,len(pct_indices)):
             xc,yc,w,h=pct_indices[i,:]
-            x1=max(int((xc-w/2)*xdim),0)
-            y1=max(int((yc-h/2)*ydim),0)
-            x2=min(int((xc+w/2)*xdim),xdim)
-            y2=min(int((yc+h/2)*ydim),ydim)
+            x1=max(int((xc-(w/2))*xdim),0)
+            y1=max(int((yc-(h/2))*ydim),0)
+            x2=min(int((xc+(w/2))*xdim),xdim)
+            y2=min(int((yc+(h/2))*ydim),ydim)
             framelist.append(np.copy(frame[y1:y2,x1:x2,:]))
 
         return framelist
+
 
