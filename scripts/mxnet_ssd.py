@@ -24,7 +24,7 @@ class MxNetSSDClassifier(object):
         self.batch_size=batch_size
         if (self.batch_size>1):
             print('Warning, batch_size>1 is not supported, using batch size of 1')
-            self.batch_size=1
+            #self.batch_size=1
         if gpu_enabled:
             self.ctx = mxnet.gpu(0)
         else:
@@ -46,33 +46,39 @@ class MxNetSSDClassifier(object):
         # operate on list of images
         if (type(image)!=type(list())):
             image = [image]
+
         #print str([img.shape for img in image])
-        for image_np in image:
+        # pack list of images into batch size as appropriate
+        num_loops = int(np.ceil(len(image)/float(self.batch_size)))
+        for i in range(0,num_loops):
             batch_data = mxnet.nd.zeros((self.batch_size, 3, 512, 512))
-            # image sizes for full image detection (top/bottom may have been cropped, use ycrop variable to determine)
-            (height, width) = (image_np.shape[0], image_np.shape[1])
-            data = mxnet.nd.array(image_np)
-            data = mxnet.img.imresize(data, 512, 512)
-            data = mxnet.nd.transpose(data, (2,0,1))
-            data = data.astype('float32')
-            data = data - self._mean_pixels
-            batch_data[0]=data
+            start_ind=i*self.batch_size
+            stop_ind=min((i+1)*self.batch_size,len(image)-1)
+            for j in range(start_ind,stop_ind+1):
+                image_np = image[j]
+                data = mxnet.nd.array(image_np)
+                data = mxnet.img.imresize(data, 512, 512)
+                data = mxnet.nd.transpose(data, (2,0,1))
+                data = data.astype('float32')
+                data = data - self._mean_pixels
+                batch_data[j-start_ind,:,:,:]=data
+
             self.mod.forward(self.batch([batch_data]))
             outputs=self.mod.get_outputs()[0].asnumpy()
             delta_time=int(time.time())-self.ts_start
 
-            # with batch size of 1, use the zeroth index
-            outputs=outputs[0,:,:]
-
             # loop over batch
-            # get rid of -1 classes
-            detections = outputs[np.where(outputs[:, 0] >= 0)[0]]
+            for j in range(0,stop_ind-start_ind):
+                outputs=outputs[j,:,:]
+                # get rid of -1 classes
+                detections = outputs[np.where(outputs[:, 0] >= 0)[0]]
 
-            # get rid of below-thresh detections
-            detections = detections[np.where(detections[:, 1] >= threshold)[0]]
-            dets.append(detections)
-            num_detections=num_detections+detections.shape[0]
+                # get rid of below-thresh detections
+                detections = detections[np.where(detections[:, 1] >= threshold)[0]]
+                dets.append(detections)
+                num_detections=num_detections+detections.shape[0]
 
+        print dets
         # detections are in form [[cls, prob, xmin, ymin, xmax, ymax]]
         return dets,num_detections
 

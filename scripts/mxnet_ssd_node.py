@@ -4,7 +4,7 @@ import rospy
 import sys
 import os
 import numpy as np
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import String, Bool
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from cv_bridge import CvBridge, CvBridgeError
@@ -25,7 +25,7 @@ class RosMxNetSSD:
 
         # ROS Parameters
         rospy.loginfo("[MXNET] Loading ROS Parameters")
-        self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
+        self.image_topic = self.load_param('~image_topic', '/usb_cam_front/image')
         #self.image_topic = self.load_param('~image_topic', '/img')
         self.detections_topic = self.load_param('~detections_topic', '/rr_mxnet/detections')
         self.publish_detection_images = self.load_param('~publish_detection_images', True)
@@ -35,14 +35,14 @@ class RosMxNetSSD:
         self.threshold = self.load_param('~threshold', 0.5)
         #self.start_enabled = self.load_param('~start_enabled ', False)
         self.start_enabled = self.load_param('~start_enabled ', True)
-        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
+        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
 
         # crop pattern
         self.level0_ncrops = self.load_param('~level0_ncrops',3)
-        self.level1_xcrops = self.load_param('~level1_xcrops',3)
+        self.level1_xcrops = self.load_param('~level1_xcrops',4)
         self.level1_ycrops = self.load_param('~level1_ycrops',2)
-        self.level1_crop_size = self.load_param('~level1_crop_size',300)
+        self.level1_crop_size = self.load_param('~level1_crop_size',380)
         
         # location of mxnet model and name, epoch, GPU and number of classes
         '''
@@ -52,10 +52,11 @@ class RosMxNetSSD:
         self.num_classes = self.load_param('~num_classes',20)
         '''
         self.model_name = self.load_param('~model_name','ssd_resnet50_512')
-        self.model_directory = self.load_param('~model_directory', '/home/ebeall/mxnet/example/ssd/model')
+        self.model_directory = self.load_param('~model_directory', '/home/ubuntu/mxnet/example/ssd/model')
         self.model_epoch = self.load_param('~model_epoch', 75)
         self.num_classes = self.load_param('~num_classes',5)
         self.enable_gpu = self.load_param('~enable_gpu', True)
+        #self.batch_size = self.load_param('~batch_size',2)
         self.batch_size = self.load_param('~batch_size',1)
 
         class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
@@ -86,7 +87,9 @@ class RosMxNetSSD:
         # ROS Publishers
         self.pub_detections=rospy.Publisher(self.detections_topic, Detection2DArray, queue_size=10)
         if (self.publish_detection_images):
-            self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
+            #self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
+            #self.pub_img_compressed_detections = rospy.Publisher(self.image_detections_topic, CompressedImage)
+            self.pub_img_compressed_detections = rospy.Publisher(self.image_detections_topic+"/compressed", CompressedImage)
         
     def load_param(self, param, default=None):
         new_param = rospy.get_param(param, default)
@@ -166,7 +169,15 @@ class RosMxNetSSD:
                         # overlay detections on the frame
                         frame = self.imageprocessor.overlay_detections(frame, decoded_image_detections)
                         try:
+                            '''
                             self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
+                            '''
+                            # send compressed image
+                            msg = CompressedImage()
+                            msg.header.stamp = rospy.Time.now()
+                            msg.format = "jpeg"
+                            msg.data = np.array(cv2.imencode('.jpg', frame[:,:,[2,1,0]])[1]).tostring()
+                            self.pub_img_compressed_detections.publish(msg)
                         except CvBridgeError as e:
                             print(e)
 
