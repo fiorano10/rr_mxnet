@@ -26,13 +26,14 @@ class RosMxNetSSD:
         # ROS Parameters
         rospy.loginfo("[MXNET] Loading ROS Parameters")
         self.image_topic = self.load_param('~image_topic', '/usb_cam_front/image')
+        #self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
         #self.image_topic = self.load_param('~image_topic', '/img')
         self.detections_topic = self.load_param('~detections_topic', '/rr_mxnet/detections')
         self.publish_detection_images = self.load_param('~publish_detection_images', True)
         #self.publish_detection_images = self.load_param('~publish_detection_images', False)
         self.image_detections_topic = self.load_param('~image_detections_topic', '/rr_mxnet/image')
         self.timer = self.load_param('~throttle_timer', 1)
-        self.threshold = self.load_param('~threshold', 0.5)
+        self.threshold = self.load_param('~threshold', 0.35)
         #self.start_enabled = self.load_param('~start_enabled ', False)
         self.start_enabled = self.load_param('~start_enabled ', True)
         self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
@@ -47,17 +48,17 @@ class RosMxNetSSD:
         # location of mxnet model and name, epoch, GPU and number of classes
         '''
         self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
-        self.model_directory = self.load_param('~model_directory', '/home/ebeall/mxnet_ssd/')
+        self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet_ssd/')
         self.model_epoch = self.load_param('~model_epoch', 1)
         self.num_classes = self.load_param('~num_classes',20)
         '''
         self.model_name = self.load_param('~model_name','ssd_resnet50_512')
-        self.model_directory = self.load_param('~model_directory', '/home/ubuntu/mxnet/example/ssd/model')
+        self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet/example/ssd/model')
         self.model_epoch = self.load_param('~model_epoch', 75)
         self.num_classes = self.load_param('~num_classes',5)
         self.enable_gpu = self.load_param('~enable_gpu', True)
-        #self.batch_size = self.load_param('~batch_size',2)
-        self.batch_size = self.load_param('~batch_size',1)
+        self.batch_size = self.load_param('~batch_size',6)
+        #self.batch_size = self.load_param('~batch_size',1)
 
         class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
                        car, cat, chair, cow, diningtable, dog, horse, motorbike, \
@@ -88,7 +89,6 @@ class RosMxNetSSD:
         self.pub_detections=rospy.Publisher(self.detections_topic, Detection2DArray, queue_size=10)
         if (self.publish_detection_images):
             #self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
-            #self.pub_img_compressed_detections = rospy.Publisher(self.image_detections_topic, CompressedImage)
             self.pub_img_compressed_detections = rospy.Publisher(self.image_detections_topic+"/compressed", CompressedImage)
         
     def load_param(self, param, default=None):
@@ -101,10 +101,10 @@ class RosMxNetSSD:
         self.start_enabled = msg.data
 
     def zoom_cb(self, msg):
-        self.zoom_enabled = msg.data
-        self.imageprocessor.set_zoom(self.zoom_enabled)
         # Note: set_zoom is safe, it doesn't take effect until the count of encoded and decoded are equal
         # otherwise we might try to decode a pattern that changed when the zoom parameter changed on the fly
+        self.zoom_enabled = msg.data
+        self.imageprocessor.set_zoom(self.zoom_enabled)
 
     def encode_detection_msg(self,detections):
         detections_msg = Detection2DArray()
@@ -169,9 +169,8 @@ class RosMxNetSSD:
                         # overlay detections on the frame
                         frame = self.imageprocessor.overlay_detections(frame, decoded_image_detections)
                         try:
-                            '''
-                            self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
-                            '''
+                            # send uncompressed image
+                            #self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
                             # send compressed image
                             msg = CompressedImage()
                             msg.header.stamp = rospy.Time.now()

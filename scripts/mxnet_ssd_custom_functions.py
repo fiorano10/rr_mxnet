@@ -110,10 +110,6 @@ class SSDCropPattern():
         if (self.data_shape is None):
             print('Not initialized, can only decode if encoded at least once')
             return []
-        # only change the zoom value if we're NOT in between encodings and decodings
-        if (self.zoom_changed and self.encode_decode==0):
-            self.zoom_changed=False
-            self.zoom_enabled=self.zoom_set_tmp
 
         # decode the crops back to original image
         pct_indices=self.get_crop_location_pcts(report_overlaps=False)
@@ -190,12 +186,17 @@ class SSDCropPattern():
         return pct_indices0
 
     def encode_crops(self,frame):
+        # only change the zoom value if we're NOT in between encodings and decodings, so check it here before we start encoding
+        if (self.zoom_changed and self.encode_decode==0):
+            self.zoom_changed=False
+            self.zoom_enabled=self.zoom_set_tmp
+        # increment the encoded images count for safety in decoding same pattern we encoded with
+        self.encode_decode = self.encode_decode + 1
+
         self.data_shape=frame.shape
         ydim,xdim=self.data_shape[0:2]
         min_dim=np.min(self.data_shape[0:2])
         max_dim=np.max(self.data_shape[0:2])
-        # increment the encoded images count for safety in decoding same pattern we encoded with
-        self.encode_decode = self.encode_decode + 1
 
         # making a list of crops
         framelist=[]

@@ -47,20 +47,23 @@ class MxNetSSDClassifier(object):
         if (type(image)!=type(list())):
             image = [image]
 
-        #print str([img.shape for img in image])
+        print str([img.shape for img in image])
+        #print len(image)
         # pack list of images into batch size as appropriate
         num_loops = int(np.ceil(len(image)/float(self.batch_size)))
         for i in range(0,num_loops):
             batch_data = mxnet.nd.zeros((self.batch_size, 3, 512, 512))
             start_ind=i*self.batch_size
-            stop_ind=min((i+1)*self.batch_size,len(image)-1)
-            for j in range(start_ind,stop_ind+1):
+            stop_ind=min((i+1)*self.batch_size,len(image))
+            print('Start: '+str(start_ind)+', stop_ind: '+str(stop_ind)+', loop %d/%d'%(i,num_loops))
+            for j in range(start_ind,stop_ind):
                 image_np = image[j]
                 data = mxnet.nd.array(image_np)
                 data = mxnet.img.imresize(data, 512, 512)
                 data = mxnet.nd.transpose(data, (2,0,1))
                 data = data.astype('float32')
                 data = data - self._mean_pixels
+                #batch_data[0]=data
                 batch_data[j-start_ind,:,:,:]=data
 
             self.mod.forward(self.batch([batch_data]))
@@ -69,16 +72,15 @@ class MxNetSSDClassifier(object):
 
             # loop over batch
             for j in range(0,stop_ind-start_ind):
-                outputs=outputs[j,:,:]
+                output=outputs[j,:,:]
                 # get rid of -1 classes
-                detections = outputs[np.where(outputs[:, 0] >= 0)[0]]
+                detections = output[np.where(output[:, 0] >= 0)[0]]
 
                 # get rid of below-thresh detections
                 detections = detections[np.where(detections[:, 1] >= threshold)[0]]
                 dets.append(detections)
                 num_detections=num_detections+detections.shape[0]
 
-        print dets
         # detections are in form [[cls, prob, xmin, ymin, xmax, ymax]]
         return dets,num_detections
 
