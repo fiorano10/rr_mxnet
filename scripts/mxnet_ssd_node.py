@@ -35,12 +35,12 @@ class RosMxNetSSD:
         self.threshold = self.load_param('~threshold', 0.5)
         #self.start_enabled = self.load_param('~start_enabled ', False)
         self.start_enabled = self.load_param('~start_enabled ', True)
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
-        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
+        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
 
         # crop pattern
         self.level0_ncrops = self.load_param('~level0_ncrops',3)
-        self.level1_xcrops = self.load_param('~level1_xcrops',5)
+        self.level1_xcrops = self.load_param('~level1_xcrops',3)
         self.level1_ycrops = self.load_param('~level1_ycrops',2)
         self.level1_crop_size = self.load_param('~level1_crop_size',300)
         
@@ -49,13 +49,13 @@ class RosMxNetSSD:
         self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
         self.model_directory = self.load_param('~model_directory', '/home/ebeall/mxnet_ssd/')
         self.model_epoch = self.load_param('~model_epoch', 1)
-        self.enable_gpu = self.load_param('~enable_gpu', True)
+        self.num_classes = self.load_param('~num_classes',20)
         '''
         self.model_name = self.load_param('~model_name','ssd_resnet50_512')
         self.model_directory = self.load_param('~model_directory', '/home/ebeall/mxnet/example/ssd/model')
         self.model_epoch = self.load_param('~model_epoch', 75)
-        self.enable_gpu = self.load_param('~enable_gpu', False)
         self.num_classes = self.load_param('~num_classes',5)
+        self.enable_gpu = self.load_param('~enable_gpu', True)
         self.batch_size = self.load_param('~batch_size',1)
 
         class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
@@ -75,7 +75,8 @@ class RosMxNetSSD:
         self.classifier = MxNetSSDClassifier(self.model_name, self.model_epoch, self.model_directory, self.batch_size, self.enable_gpu, self.num_classes)
         self.imageprocessor = SSDCropPattern(self.zoom_enabled, self.level0_ncrops, self.level1_xcrops, self.level1_ycrops, self.level1_crop_size)
         self.last_detection_time = 0     
-    
+        self.reported_overlaps=False
+
         self.bridge = CvBridge()
         # ROS Subscribers
         self.sub_image = rospy.Subscriber(self.image_topic, Image, self.image_cb, queue_size=1)
@@ -87,9 +88,6 @@ class RosMxNetSSD:
         if (self.publish_detection_images):
             self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
         
-        pct_indices,level0_overlap, level1_xoverlap, level1_yoverlap=self.imageprocessor.get_crop_location_pcts(report_overlaps=True)
-        rospy.loginfo("[MxNet] Overlap level0: %.2f, level1: %.2fx%.2f", level0_overlap, level1_xoverlap, level1_yoverlap)
-
     def load_param(self, param, default=None):
         new_param = rospy.get_param(param, default)
         rospy.loginfo("[MxNet] %s: %s", param, new_param)
@@ -129,6 +127,13 @@ class RosMxNetSSD:
         return detections_msg
 
     def image_cb(self, image):
+        if (not self.reported_overlaps):
+            cv2_img = self.bridge.imgmsg_to_cv2(image, "rgb8")
+            # get overlaps
+            pct_indices,level0_overlap, level1_xoverlap, level1_yoverlap=self.imageprocessor.get_crop_location_pcts(report_overlaps=True, data_shape=cv2_img.shape)
+            rospy.loginfo("\n\n[MxNet] Image Shape=%d,%d,%d, Overlap level0: %.2f, level1: %.2fx%.2f\n\n", cv2_img.shape[0],cv2_img.shape[1],cv2_img.shape[2],level0_overlap, level1_xoverlap, level1_yoverlap)
+            self.reported_overlaps=True
+    
         if self.start_enabled:
             current_time = rospy.get_rostime().secs
             if current_time % self.timer == 0 and self.last_detection_time != current_time:
@@ -161,7 +166,7 @@ class RosMxNetSSD:
                         # overlay detections on the frame
                         frame = self.imageprocessor.overlay_detections(frame, decoded_image_detections)
                         try:
-                            self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "bgr8"))
+                            self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
                         except CvBridgeError as e:
                             print(e)
 

@@ -1,22 +1,5 @@
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
-
 import mxnet as mx
-from symbol.common import multi_layer_feature, multibox_layer
+from common import multi_layer_feature, multibox_layer
 
 
 def import_module(module_name):
@@ -28,7 +11,7 @@ def import_module(module_name):
 
 def get_symbol_train(network, num_classes, from_layers, num_filters, strides, pads,
                      sizes, ratios, normalizations=-1, steps=[], min_filter=128,
-                     nms_thresh=0.5, force_suppress=False, nms_topk=400, **kwargs):
+                     nms_thresh=0.5, force_suppress=False, nms_topk=400, minimum_negative_samples=0, **kwargs):
     """Build network symbol for training SSD
 
     Parameters
@@ -72,14 +55,16 @@ def get_symbol_train(network, num_classes, from_layers, num_filters, strides, pa
         whether suppress different class objects
     nms_topk : int
         apply NMS to top K detections
-
+    minimum_negative_samples : int
+        always have some negative examples, no matter how many positive there are.
+        this is useful when training on images with no ground-truth.
     Returns
     -------
     mx.Symbol
 
     """
     label = mx.sym.Variable('label')
-    body = import_module(network).get_symbol(num_classes, **kwargs)
+    body = import_module(network).get_symbol(num_classes=num_classes, **kwargs)
     layers = multi_layer_feature(body, from_layers, num_filters, strides, pads,
         min_filter=min_filter)
 
@@ -87,9 +72,9 @@ def get_symbol_train(network, num_classes, from_layers, num_filters, strides, pa
         num_classes, sizes=sizes, ratios=ratios, normalization=normalizations, \
         num_channels=num_filters, clip=False, interm_layer=0, steps=steps)
 
-    tmp = mx.symbol.contrib.MultiBoxTarget(
+    tmp = mx.contrib.symbol.MultiBoxTarget(
         *[anchor_boxes, label, cls_preds], overlap_threshold=.5, \
-        ignore_label=-1, negative_mining_ratio=3, minimum_negative_samples=0, \
+        ignore_label=-1, negative_mining_ratio=3, minimum_negative_samples=minimum_negative_samples, \
         negative_mining_thresh=.5, variances=(0.1, 0.1, 0.2, 0.2),
         name="multibox_target")
     loc_target = tmp[0]
@@ -106,7 +91,7 @@ def get_symbol_train(network, num_classes, from_layers, num_filters, strides, pa
 
     # monitoring training status
     cls_label = mx.symbol.MakeLoss(data=cls_target, grad_scale=0, name="cls_label")
-    det = mx.symbol.contrib.MultiBoxDetection(*[cls_prob, loc_preds, anchor_boxes], \
+    det = mx.contrib.symbol.MultiBoxDetection(*[cls_prob, loc_preds, anchor_boxes], \
         name="detection", nms_threshold=nms_thresh, force_suppress=force_suppress,
         variances=(0.1, 0.1, 0.2, 0.2), nms_topk=nms_topk)
     det = mx.symbol.MakeLoss(data=det, grad_scale=0, name="det_out")
@@ -167,7 +152,7 @@ def get_symbol(network, num_classes, from_layers, num_filters, sizes, ratios,
     mx.Symbol
 
     """
-    body = import_module(network).get_symbol(num_classes, **kwargs)
+    body = import_module(network).get_symbol(num_classes=num_classes, **kwargs)
     layers = multi_layer_feature(body, from_layers, num_filters, strides, pads,
         min_filter=min_filter)
 
@@ -177,7 +162,7 @@ def get_symbol(network, num_classes, from_layers, num_filters, sizes, ratios,
 
     cls_prob = mx.symbol.SoftmaxActivation(data=cls_preds, mode='channel', \
         name='cls_prob')
-    out = mx.symbol.contrib.MultiBoxDetection(*[cls_prob, loc_preds, anchor_boxes], \
+    out = mx.contrib.symbol.MultiBoxDetection(*[cls_prob, loc_preds, anchor_boxes], \
         name="detection", nms_threshold=nms_thresh, force_suppress=force_suppress,
         variances=(0.1, 0.1, 0.2, 0.2), nms_topk=nms_topk)
     return out

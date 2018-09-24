@@ -1,20 +1,3 @@
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
-
 import mxnet as mx
 import numpy as np
 
@@ -46,8 +29,10 @@ def conv_act_layer(from_layer, name, num_filter, kernel=(1,1), pad=(0,0), \
     ----------
     (conv, relu) mx.Symbols
     """
+    bias = mx.symbol.Variable(name="{}_conv_bias".format(name),   
+        init=mx.init.Constant(0.0), attr={'__lr_mult__': '2.0'})
     conv = mx.symbol.Convolution(data=from_layer, kernel=kernel, pad=pad, \
-        stride=stride, num_filter=num_filter, name="{}_conv".format(name))
+        stride=stride, num_filter=num_filter, name="{}_conv".format(name), bias=bias)
     if use_batchnorm:
         conv = mx.symbol.BatchNorm(data=conv, name="{}_bn".format(name))
     relu = mx.symbol.Activation(data=conv, act_type=act_type, \
@@ -283,9 +268,8 @@ def multibox_layer(from_layers, num_classes, sizes=[.2, .95],
             step = (steps[k], steps[k])
         else:
             step = '(-1.0, -1.0)'
-        anchors = mx.symbol.contrib.MultiBoxPrior(from_layer, sizes=size_str, ratios=ratio_str,
-                                                  clip=clip, name="{}_anchors".format(from_name),
-                                                  steps=step)
+        anchors = mx.contrib.symbol.MultiBoxPrior(from_layer, sizes=size_str, ratios=ratio_str, \
+            clip=clip, name="{}_anchors".format(from_name), steps=step)
         anchors = mx.symbol.Flatten(data=anchors)
         anchor_layers.append(anchors)
 

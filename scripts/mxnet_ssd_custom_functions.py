@@ -201,7 +201,7 @@ class SSDCropPattern():
         framelist=[]
         # If level0_ncrops==0, resize to square and return
         if (self.level0_ncrops==0):
-            framelist.append(cv2.resize(frame,(min_dim,min_dim)))
+            framelist.append(cv2.resize(np.copy(frame),(min_dim,min_dim)))
             return framelist
 
         # otherwise, loop over the crop indices and add to framelist
