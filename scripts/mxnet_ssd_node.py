@@ -10,12 +10,7 @@ from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithP
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_ssd import MxNetSSDClassifier
 from mxnet_ssd_custom_functions import SSDCropPattern
-
-# debugging
 import cv2
-#import matplotlib.pylab as plt
-#plt.ion()
-#plt.figure()
 
 class RosMxNetSSD:
 
@@ -28,16 +23,16 @@ class RosMxNetSSD:
         self.image_topic = self.load_param('~image_topic', '/usb_cam_front/image')
         #self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
         #self.image_topic = self.load_param('~image_topic', '/img')
-        self.detections_topic = self.load_param('~detections_topic', '/rr_mxnet/detections')
+        self.detections_topic = self.load_param('~detections_topic', '~detections')
         self.publish_detection_images = self.load_param('~publish_detection_images', True)
         #self.publish_detection_images = self.load_param('~publish_detection_images', False)
-        self.image_detections_topic = self.load_param('~image_detections_topic', '/rr_mxnet/image')
+        self.image_detections_topic = self.load_param('~image_detections_topic', '~image')
         self.timer = self.load_param('~throttle_timer', 1)
         self.threshold = self.load_param('~threshold', 0.35)
         #self.start_enabled = self.load_param('~start_enabled ', False)
         self.start_enabled = self.load_param('~start_enabled ', True)
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
-        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
+        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
 
         # crop pattern
         self.level0_ncrops = self.load_param('~level0_ncrops',3)
@@ -49,13 +44,16 @@ class RosMxNetSSD:
         '''
         self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
         self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet_ssd/')
+        self.network = self.load_param('~network','mobilenet')
         self.model_epoch = self.load_param('~model_epoch', 1)
         self.num_classes = self.load_param('~num_classes',20)
         '''
         self.model_name = self.load_param('~model_name','ssd_resnet50_512')
         self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet/example/ssd/model')
+        self.network = self.load_param('~network','resnet50')
         self.model_epoch = self.load_param('~model_epoch', 75)
         self.num_classes = self.load_param('~num_classes',5)
+
         self.enable_gpu = self.load_param('~enable_gpu', True)
         self.batch_size = self.load_param('~batch_size',6)
         #self.batch_size = self.load_param('~batch_size',1)
@@ -74,10 +72,11 @@ class RosMxNetSSD:
         # Class Variables
         self.detection_seq = 0
         self.camera_frame = "camera_frame"
-        self.classifier = MxNetSSDClassifier(self.model_name, self.model_epoch, self.model_directory, self.batch_size, self.enable_gpu, self.num_classes)
+        self.classifier = MxNetSSDClassifier(self.model_name, self.model_epoch, self.model_directory, self.network, self.batch_size, self.enable_gpu, self.num_classes)
         self.imageprocessor = SSDCropPattern(self.zoom_enabled, self.level0_ncrops, self.level1_xcrops, self.level1_ycrops, self.level1_crop_size)
         self.last_detection_time = 0     
         self.reported_overlaps=False
+        self.data_shape=None
 
         self.bridge = CvBridge()
         # ROS Subscribers
@@ -88,8 +87,10 @@ class RosMxNetSSD:
         # ROS Publishers
         self.pub_detections=rospy.Publisher(self.detections_topic, Detection2DArray, queue_size=10)
         if (self.publish_detection_images):
-            #self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
-            self.pub_img_compressed_detections = rospy.Publisher(self.image_detections_topic+"/compressed", CompressedImage)
+            # publish uncompressed image
+            self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
+            # compressed image topic must end in /compressed
+            self.pub_img_compressed_detections = rospy.Publisher(self.image_detections_topic+"/compressed", CompressedImage, queue_size=1)
         
     def load_param(self, param, default=None):
         new_param = rospy.get_param(param, default)
@@ -102,7 +103,7 @@ class RosMxNetSSD:
 
     def zoom_cb(self, msg):
         # Note: set_zoom is safe, it doesn't take effect until the count of encoded and decoded are equal
-        # otherwise we might try to decode a pattern that changed when the zoom parameter changed on the fly
+        # this was added to the custom functions b/c otherwise could try to decode a pattern that changed when the zoom parameter changed on the fly
         self.zoom_enabled = msg.data
         self.imageprocessor.set_zoom(self.zoom_enabled)
 
@@ -129,14 +130,18 @@ class RosMxNetSSD:
         self.detection_seq += 1
         return detections_msg
 
+    def report_overlaps(self):
+        pct_indices,level0_overlap, level1_xoverlap, level1_yoverlap=self.imageprocessor.get_crop_location_pcts(report_overlaps=True, data_shape=self.data_shape)
+        rospy.loginfo("\n\n[MxNet] Image Shape=%d,%d,%d, Overlap level0: %.2f, level1: %.2fx%.2f\n\n", self.data_shape[0],self.data_shape[1],self.data_shape[2],level0_overlap, level1_xoverlap, level1_yoverlap)
+
     def image_cb(self, image):
         if (not self.reported_overlaps):
             cv2_img = self.bridge.imgmsg_to_cv2(image, "rgb8")
-            # get overlaps
-            pct_indices,level0_overlap, level1_xoverlap, level1_yoverlap=self.imageprocessor.get_crop_location_pcts(report_overlaps=True, data_shape=cv2_img.shape)
-            rospy.loginfo("\n\n[MxNet] Image Shape=%d,%d,%d, Overlap level0: %.2f, level1: %.2fx%.2f\n\n", cv2_img.shape[0],cv2_img.shape[1],cv2_img.shape[2],level0_overlap, level1_xoverlap, level1_yoverlap)
+            # get and report the overlap percentages
+            self.data_shape=cv2_img.shape
+            self.report_overlaps()
             self.reported_overlaps=True
-    
+
         if self.start_enabled:
             current_time = rospy.get_rostime().secs
             if current_time % self.timer == 0 and self.last_detection_time != current_time:
@@ -170,7 +175,7 @@ class RosMxNetSSD:
                         frame = self.imageprocessor.overlay_detections(frame, decoded_image_detections)
                         try:
                             # send uncompressed image
-                            #self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
+                            self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
                             # send compressed image
                             msg = CompressedImage()
                             msg.header.stamp = rospy.Time.now()

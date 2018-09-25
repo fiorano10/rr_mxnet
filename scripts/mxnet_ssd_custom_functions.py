@@ -43,6 +43,7 @@ class SSDCropPattern():
 
     def iou(self, x, ys):
             """
+            Taken from Joshua Zheng's (zhreshold) mxnet-ssd repo
             Calculate intersection-over-union overlap
             Params:
             ----------
@@ -186,6 +187,7 @@ class SSDCropPattern():
         return pct_indices0
 
     def encode_crops(self,frame):
+        # check for Safe Zoom change-on-the-fly
         # only change the zoom value if we're NOT in between encodings and decodings, so check it here before we start encoding
         if (self.zoom_changed and self.encode_decode==0):
             self.zoom_changed=False
@@ -193,19 +195,20 @@ class SSDCropPattern():
         # increment the encoded images count for safety in decoding same pattern we encoded with
         self.encode_decode = self.encode_decode + 1
 
+        # on to the encoding of crops, get image dimensions
         self.data_shape=frame.shape
         ydim,xdim=self.data_shape[0:2]
         min_dim=np.min(self.data_shape[0:2])
         max_dim=np.max(self.data_shape[0:2])
 
-        # making a list of crops
+        # make the list of crops
         framelist=[]
         # If level0_ncrops==0, resize to square and return
         if (self.level0_ncrops==0):
             framelist.append(cv2.resize(np.copy(frame),(min_dim,min_dim)))
             return framelist
 
-        # otherwise, loop over the crop indices and add to framelist
+        # otherwise, get the crop indices, loop over the crop indices and add a copy of each crop to framelist
         pct_indices=self.get_crop_location_pcts(report_overlaps=False)
         ydim,xdim=self.data_shape[0:2]
         for i in range(0,len(pct_indices)):

@@ -11,7 +11,7 @@ from symbol.symbol_factory import get_symbol
 class MxNetSSDClassifier(object):
 
     # MXNet-based single-shot detector 
-    def __init__(self, model_name, model_epoch, model_directory, batch_size=1, gpu_enabled=True, num_classes=20):
+    def __init__(self, model_name, model_epoch, model_directory, network_name='resnet50', batch_size=1, gpu_enabled=True, num_classes=20):
         self.ts_start=int(time.time())
 
         # setup MXNet detector
@@ -22,9 +22,7 @@ class MxNetSSDClassifier(object):
         self.num_classes = num_classes
         self.batch = namedtuple('Batch', ['data'])
         self.batch_size=batch_size
-        if (self.batch_size>1):
-            print('Warning, batch_size>1 is not supported, using batch size of 1')
-            #self.batch_size=1
+        self.network = network_name
         if gpu_enabled:
             self.ctx = mxnet.gpu(0)
         else:
@@ -34,7 +32,7 @@ class MxNetSSDClassifier(object):
         self.mean_pixels=(123, 117,104)
         self._mean_pixels = mxnet.nd.array(self.mean_pixels).reshape((3,1,1))
         _, args, auxs = mxnet.model.load_checkpoint(self.prefix, self.epoch)
-        symbol = get_symbol('resnet50', 512, num_classes=self.num_classes)
+        symbol = get_symbol(self.network, 512, num_classes=self.num_classes)
         self.mod = mxnet.mod.Module(symbol, context=self.ctx)
         self.mod.bind(for_training=False, data_shapes=[('data', (self.batch_size, 3, 512, 512))])
         self.mod.set_params(args, auxs)
@@ -47,15 +45,13 @@ class MxNetSSDClassifier(object):
         if (type(image)!=type(list())):
             image = [image]
 
-        print str([img.shape for img in image])
-        #print len(image)
+        #print str([img.shape for img in image])
         # pack list of images into batch size as appropriate
         num_loops = int(np.ceil(len(image)/float(self.batch_size)))
         for i in range(0,num_loops):
             batch_data = mxnet.nd.zeros((self.batch_size, 3, 512, 512))
             start_ind=i*self.batch_size
             stop_ind=min((i+1)*self.batch_size,len(image))
-            print('Start: '+str(start_ind)+', stop_ind: '+str(stop_ind)+', loop %d/%d'%(i,num_loops))
             for j in range(start_ind,stop_ind):
                 image_np = image[j]
                 data = mxnet.nd.array(image_np)
@@ -63,7 +59,6 @@ class MxNetSSDClassifier(object):
                 data = mxnet.nd.transpose(data, (2,0,1))
                 data = data.astype('float32')
                 data = data - self._mean_pixels
-                #batch_data[0]=data
                 batch_data[j-start_ind,:,:,:]=data
 
             self.mod.forward(self.batch([batch_data]))
