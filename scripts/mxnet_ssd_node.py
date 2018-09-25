@@ -23,6 +23,7 @@ class RosMxNetSSD:
         self.publish_detection_images = self.load_param('~publish_detection_images', False)
         self.image_detections_topic = self.load_param('~image_detections_topic', '~image')
         self.timer = self.load_param('~throttle_timer', 5)
+        self.latency_threshold_time=self.load_param('~latency_threshold', 2)
         self.threshold = self.load_param('~threshold', 0.5)
         self.start_enabled = self.load_param('~start_enabled ', False)
         self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
@@ -56,6 +57,16 @@ class RosMxNetSSD:
         # save detections output and location
         self.save_detections = self.load_param('~save_detections', False)
         self.save_directory = self.load_param('~save_directory', '/tmp')
+
+        # Digilabs section
+        self.model_directory = '/home/ebeall/mxnet_ssd'
+        self.model_name = 'ssd_resnet50_512'
+        self.model_epoch = 75
+        self.network = 'resnet50'
+        self.num_classes=5
+        self.start_enabled = True
+        self.publish_detection_images = True
+        self.timer = 1
 
         # COMING SOON SECTION
         #self.mask_topic = self.load_param('~mask_topic', '/img_segmentations')
@@ -133,9 +144,15 @@ class RosMxNetSSD:
             self.report_overlaps()
             self.reported_overlaps=True
 
+        # check latency and return if more than latency threshold out of date
+        current_time = rospy.get_rostime().secs + float(int(rospy.get_rostime().nsecs/1000000.0))/1000.0
+        image_time = image.header.stamp.secs + float(int(image.header.stamp.nsecs/1000000.0))/1000.0
+        if (current_time-image_time>self.latency_threshold_time):
+            return
+
         if self.start_enabled:
             current_time = rospy.get_rostime().secs
-            if current_time % self.timer == 0 and self.last_detection_time != current_time:
+            if self.last_detection_time+self.timer <= current_time:
                 self.last_detection_time = current_time
                 try:
                     cv2_img = self.bridge.imgmsg_to_cv2(image, "rgb8")
