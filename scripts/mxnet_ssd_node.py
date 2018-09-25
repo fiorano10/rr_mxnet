@@ -41,11 +41,13 @@ class RosMxNetSSD:
         self.level1_crop_size = self.load_param('~level1_crop_size',380)
         
         # location of mxnet model and name, epoch, GPU and number of classes
-        '''
-        self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
+        #self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
+        #self.model_epoch = self.load_param('~model_epoch', 1)
+        #self.network = self.load_param('~network','mobilenet')
+        self.model_name = self.load_param('~model_name','ssd_resnet50_512')
+        self.model_epoch = self.load_param('~model_epoch', 222)
+        self.network = self.load_param('~network','resnet50')
         self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet_ssd/')
-        self.network = self.load_param('~network','mobilenet')
-        self.model_epoch = self.load_param('~model_epoch', 1)
         self.num_classes = self.load_param('~num_classes',20)
         '''
         self.model_name = self.load_param('~model_name','ssd_resnet50_512')
@@ -53,10 +55,12 @@ class RosMxNetSSD:
         self.network = self.load_param('~network','resnet50')
         self.model_epoch = self.load_param('~model_epoch', 75)
         self.num_classes = self.load_param('~num_classes',5)
+        '''
 
         self.enable_gpu = self.load_param('~enable_gpu', True)
-        self.batch_size = self.load_param('~batch_size',6)
-        #self.batch_size = self.load_param('~batch_size',1)
+        # recommendation to use self.level0_ncrops in most cases for batch_size
+        #self.batch_size = self.load_param('~batch_size',3)
+        self.batch_size = self.load_param('~batch_size',1)
 
         class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
                        car, cat, chair, cow, diningtable, dog, horse, motorbike, \
