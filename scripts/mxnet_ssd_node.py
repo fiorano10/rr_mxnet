@@ -20,19 +20,14 @@ class RosMxNetSSD:
 
         # ROS Parameters
         rospy.loginfo("[MXNET] Loading ROS Parameters")
-        self.image_topic = self.load_param('~image_topic', '/usb_cam_front/image')
-        #self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
-        #self.image_topic = self.load_param('~image_topic', '/img')
+        self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
         self.detections_topic = self.load_param('~detections_topic', '~detections')
-        self.publish_detection_images = self.load_param('~publish_detection_images', True)
-        #self.publish_detection_images = self.load_param('~publish_detection_images', False)
+        self.publish_detection_images = self.load_param('~publish_detection_images', False)
         self.image_detections_topic = self.load_param('~image_detections_topic', '~image')
         self.timer = self.load_param('~throttle_timer', 1)
         self.threshold = self.load_param('~threshold', 0.35)
-        #self.start_enabled = self.load_param('~start_enabled ', False)
-        self.start_enabled = self.load_param('~start_enabled ', True)
-        #self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
+        self.start_enabled = self.load_param('~start_enabled ', False)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
 
         # crop pattern
         self.level0_ncrops = self.load_param('~level0_ncrops',3)
@@ -41,37 +36,44 @@ class RosMxNetSSD:
         self.level1_crop_size = self.load_param('~level1_crop_size',380)
         
         # location of mxnet model and name, epoch, GPU and number of classes
-        #self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
-        #self.model_epoch = self.load_param('~model_epoch', 1)
-        #self.network = self.load_param('~network','mobilenet')
-        self.model_name = self.load_param('~model_name','ssd_resnet50_512')
-        self.model_epoch = self.load_param('~model_epoch', 222)
-        self.network = self.load_param('~network','resnet50')
         self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet_ssd/')
         self.num_classes = self.load_param('~num_classes',20)
-        '''
+        self.enable_gpu = self.load_param('~enable_gpu', True)
+        # recommendation to use self.level0_ncrops in most cases for batch_size
+        self.batch_size = self.load_param('~batch_size',1)
+        # this bool is only set to True for quicker debugging, in most cases you should use rosparams to set these values explicitly
+        use_vocdev_mobilenet=True
+        if (use_vocdev_mobilenet):
+            self.model_name = self.load_param('~model_name','mobilenet-ssd-512')
+            self.model_epoch = self.load_param('~model_epoch', 1)
+            self.network = self.load_param('~network','mobilenet')
+        else:
+            self.model_name = self.load_param('~model_name','ssd_resnet50_512')
+            self.model_epoch = self.load_param('~model_epoch', 222)
+            self.network = self.load_param('~network','resnet50')
+        self.class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
+                       car, cat, chair, cow, diningtable, dog, horse, motorbike, \
+                       person, pottedplant, sheep, sofa, train, tvmonitor'
+        
+        # save detections output and location
+        self.save_detections = self.load_param('~save_detections', False)
+        self.save_directory = self.load_param('~save_directory', '/tmp')
+
+        # COMING SOON SECTION
+        #self.mask_topic = self.load_param('~mask_topic', '/img_segmentations')
+
+        # TODO REMOVE: digilabs-specific code
+        self.image_topic = self.load_param('~image_topic', '/usb_cam_front/image')
+        self.publish_detection_images = self.load_param('~publish_detection_images', True)
         self.model_name = self.load_param('~model_name','ssd_resnet50_512')
-        self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet/example/ssd/model')
         self.network = self.load_param('~network','resnet50')
         self.model_epoch = self.load_param('~model_epoch', 75)
         self.num_classes = self.load_param('~num_classes',5)
-        '''
-
-        self.enable_gpu = self.load_param('~enable_gpu', True)
-        # recommendation to use self.level0_ncrops in most cases for batch_size
-        #self.batch_size = self.load_param('~batch_size',3)
-        self.batch_size = self.load_param('~batch_size',1)
-
-        class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
-                       car, cat, chair, cow, diningtable, dog, horse, motorbike, \
-                       person, pottedplant, sheep, sofa, train, tvmonitor'
-        class_names = 'goose, person, golfcart, lawnmower, dog'
-
-        # COMING SOON SECTION
-        # save detections output and location
-        #self.save_detections = self.load_param('~save_detections', False)
-        #self.save_directory = self.load_param('~save_directory', '/tmp')
-        #self.mask_topic = self.load_param('~mask_topic', '/img_segmentations')
+        self.batch_size = self.load_param('~batch_size',3)
+        self.class_names = 'goose, person, golfcart, lawnmower, dog'
+        self.start_enabled = self.load_param('~start_enabled ', True)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
+        # END digilabs-specific code
 
         # Class Variables
         self.detection_seq = 0
@@ -188,6 +190,8 @@ class RosMxNetSSD:
                             self.pub_img_compressed_detections.publish(msg)
                         except CvBridgeError as e:
                             print(e)
+                    if (self.save_detections):
+                        cv2.imwrite(self.save_directory+'/mxnet_detection_%05d.jpg'%(self.detection_seq),frame[:,:,[2,1,0]])
 
                 except CvBridgeError, e:
                     rospy.logerr(e)
