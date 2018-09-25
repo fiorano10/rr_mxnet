@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-import sys
-import os
 import numpy as np
 import cv2
 import itertools
@@ -221,4 +219,6 @@ class SSDCropPattern():
 
         return framelist
 
+def convert_frame_to_jpeg_string(frame):
+    return np.array(cv2.imencode('.jpg', frame[:,:,[2,1,0]])[1]).tostring()
 

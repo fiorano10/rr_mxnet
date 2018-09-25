@@ -2,7 +2,6 @@
 
 import mxnet
 import time
-import cv2
 import numpy as np
 from collections import namedtuple
 from symbol.symbol_factory import get_symbol

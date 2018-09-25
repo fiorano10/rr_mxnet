@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import rospy
-import sys
 import os
 import numpy as np
 from sensor_msgs.msg import Image, CompressedImage
@@ -9,8 +8,7 @@ from std_msgs.msg import String, Bool
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_ssd import MxNetSSDClassifier
-from mxnet_ssd_custom_functions import SSDCropPattern
-import cv2
+from mxnet_ssd_custom_functions import SSDCropPattern, convert_frame_to_jpeg_string
 
 class RosMxNetSSD:
 
@@ -24,13 +22,13 @@ class RosMxNetSSD:
         self.detections_topic = self.load_param('~detections_topic', '~detections')
         self.publish_detection_images = self.load_param('~publish_detection_images', False)
         self.image_detections_topic = self.load_param('~image_detections_topic', '~image')
-        self.timer = self.load_param('~throttle_timer', 1)
-        self.threshold = self.load_param('~threshold', 0.35)
+        self.timer = self.load_param('~throttle_timer', 5)
+        self.threshold = self.load_param('~threshold', 0.5)
         self.start_enabled = self.load_param('~start_enabled ', False)
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', True)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
 
         # crop pattern
-        self.level0_ncrops = self.load_param('~level0_ncrops',3)
+        self.level0_ncrops = self.load_param('~level0_ncrops',2)
         self.level1_xcrops = self.load_param('~level1_xcrops',4)
         self.level1_ycrops = self.load_param('~level1_ycrops',2)
         self.level1_crop_size = self.load_param('~level1_crop_size',380)
@@ -61,19 +59,6 @@ class RosMxNetSSD:
 
         # COMING SOON SECTION
         #self.mask_topic = self.load_param('~mask_topic', '/img_segmentations')
-
-        # TODO REMOVE: digilabs-specific code
-        self.image_topic = self.load_param('~image_topic', '/usb_cam_front/image')
-        self.publish_detection_images = self.load_param('~publish_detection_images', True)
-        self.model_name = self.load_param('~model_name','ssd_resnet50_512')
-        self.network = self.load_param('~network','resnet50')
-        self.model_epoch = self.load_param('~model_epoch', 75)
-        self.num_classes = self.load_param('~num_classes',5)
-        self.batch_size = self.load_param('~batch_size',3)
-        self.class_names = 'goose, person, golfcart, lawnmower, dog'
-        self.start_enabled = self.load_param('~start_enabled ', True)
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
-        # END digilabs-specific code
 
         # Class Variables
         self.detection_seq = 0
@@ -138,7 +123,7 @@ class RosMxNetSSD:
 
     def report_overlaps(self):
         pct_indices,level0_overlap, level1_xoverlap, level1_yoverlap=self.imageprocessor.get_crop_location_pcts(report_overlaps=True, data_shape=self.data_shape)
-        rospy.loginfo("\n\n[MxNet] Image Shape=%d,%d,%d, Overlap level0: %.2f, level1: %.2fx%.2f\n\n", self.data_shape[0],self.data_shape[1],self.data_shape[2],level0_overlap, level1_xoverlap, level1_yoverlap)
+        rospy.loginfo("\nReported Overlap\nFor Input Image Shape=%d,%d,%d\nOverlap first-level: %d%%, second-level zoom: %d%% %d%%\n\n", self.data_shape[0],self.data_shape[1],self.data_shape[2], int(100*level0_overlap), int(100*level1_xoverlap), int(100*level1_yoverlap))
 
     def image_cb(self, image):
         if (not self.reported_overlaps):
@@ -186,7 +171,7 @@ class RosMxNetSSD:
                             msg = CompressedImage()
                             msg.header.stamp = rospy.Time.now()
                             msg.format = "jpeg"
-                            msg.data = np.array(cv2.imencode('.jpg', frame[:,:,[2,1,0]])[1]).tostring()
+                            msg.data = convert_frame_to_jpeg_string(frame)
                             self.pub_img_compressed_detections.publish(msg)
                         except CvBridgeError as e:
                             print(e)
