@@ -58,16 +58,6 @@ class RosMxNetSSD:
         self.save_detections = self.load_param('~save_detections', False)
         self.save_directory = self.load_param('~save_directory', '/tmp')
 
-        # Digilabs section
-        self.model_directory = '/home/ebeall/mxnet_ssd'
-        self.model_name = 'ssd_resnet50_512'
-        self.model_epoch = 75
-        self.network = 'resnet50'
-        self.num_classes=5
-        self.start_enabled = True
-        self.publish_detection_images = True
-        self.timer = 1
-
         # COMING SOON SECTION
         #self.mask_topic = self.load_param('~mask_topic', '/img_segmentations')
 
