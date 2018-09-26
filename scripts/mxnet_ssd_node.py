@@ -95,12 +95,14 @@ class RosMxNetSSD:
 
     def enable_cb(self, msg):
         self.start_enabled = msg.data
+        rospy.loginfo("MxNet enable_cb: "+str(self.start_enabled))
 
     def zoom_cb(self, msg):
         # Note: set_zoom is safe, it doesn't take effect until the count of encoded and decoded are equal
         # this was added to the custom functions b/c otherwise could try to decode a pattern that changed when the zoom parameter changed on the fly
         self.zoom_enabled = msg.data
         self.imageprocessor.set_zoom(self.zoom_enabled)
+        rospy.loginfo("MxNet zoom_cb: "+str(self.zoom_enabled))
 
     def encode_detection_msg(self,detections):
         detections_msg = Detection2DArray()
