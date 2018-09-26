@@ -15,8 +15,6 @@ class MxNetSSDClassifier(object):
 
         # setup MXNet detector
         self.epoch = model_epoch
-        print model_name
-        print model_directory
         self.prefix = str(model_directory) + '/' + str(model_name)
         self.num_classes = num_classes
         self.batch = namedtuple('Batch', ['data'])
@@ -32,7 +30,10 @@ class MxNetSSDClassifier(object):
         self._mean_pixels = mxnet.nd.array(self.mean_pixels).reshape((3,1,1))
         _, args, auxs = mxnet.model.load_checkpoint(self.prefix, self.epoch)
         symbol = get_symbol(self.network, 512, num_classes=self.num_classes)
-        self.mod = mxnet.mod.Module(symbol, context=self.ctx)
+        #self.mod = mxnet.mod.Module(symbol, context=self.ctx)
+        self.mod = mxnet.mod.Module(symbol, context=self.ctx, label_names=None)
+        #mod = mx.mod.Module(net, label_names=('label',), logger=logger, context=ctx, fixed_param_names=net.list_arguments())
+        #self.mod.bind(for_training=False, data_shapes=[('data', (self.batch_size, 3, 512, 512))], label_shapes=None)
         self.mod.bind(for_training=False, data_shapes=[('data', (self.batch_size, 3, 512, 512))])
         self.mod.set_params(args, auxs)
 
@@ -44,7 +45,6 @@ class MxNetSSDClassifier(object):
         if (type(image)!=type(list())):
             image = [image]
 
-        #print str([img.shape for img in image])
         # pack list of images into batch size as appropriate
         num_loops = int(np.ceil(len(image)/float(self.batch_size)))
         for i in range(0,num_loops):

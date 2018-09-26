@@ -50,10 +50,10 @@ class RosMxNetSSD:
             self.model_name = self.load_param('~model_name','ssd_resnet50_512')
             self.model_epoch = self.load_param('~model_epoch', 222)
             self.network = self.load_param('~network','resnet50')
-        self.class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
+        class_names = 'aeroplane, bicycle, bird, boat, bottle, bus, \
                        car, cat, chair, cow, diningtable, dog, horse, motorbike, \
                        person, pottedplant, sheep, sofa, train, tvmonitor'
-        
+
         # save detections output and location
         self.save_detections = self.load_param('~save_detections', False)
         self.save_directory = self.load_param('~save_directory', '/tmp')
@@ -69,6 +69,7 @@ class RosMxNetSSD:
         self.last_detection_time = 0     
         self.reported_overlaps=False
         self.data_shape=None
+        self.class_names = [cls for cls in class_names.strip('\n').replace(' ','').split(',')]
 
         self.bridge = CvBridge()
         # ROS Subscribers
@@ -83,6 +84,8 @@ class RosMxNetSSD:
             self.pub_img_detections=rospy.Publisher(self.image_detections_topic , Image, queue_size=1)
             # compressed image topic must end in /compressed
             self.pub_img_compressed_detections = rospy.Publisher(self.image_detections_topic+"/compressed", CompressedImage, queue_size=1)
+
+        rospy.loginfo("[MxNet Initialized with model %s]",self.model_name)
         
     def load_param(self, param, default=None):
         new_param = rospy.get_param(param, default)
@@ -103,7 +106,7 @@ class RosMxNetSSD:
         detections_msg = Detection2DArray()
         if (len(detections)>0):
             i=0
-            rospy.logwarn("Object detected")
+            detstring='Object Detected:'
             for det in detections:
                 detection = Detection2D()
                 detection.header.seq = self.detection_seq
@@ -118,7 +121,9 @@ class RosMxNetSSD:
                 detection.bbox.size_x = det[4]-det[2]
                 detection.bbox.size_y = det[5]-det[3]
                 detections_msg.detections.append(detection)
+                detstring=detstring+' '+self.class_names[int(det[0])]+', p=%.2f.'%(det[1])
                 i+=1
+            rospy.logwarn(detstring)
         self.detection_seq += 1
         return detections_msg
 
