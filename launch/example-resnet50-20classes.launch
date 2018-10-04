@@ -6,8 +6,8 @@
     <param name="image_detections_topic" value="~image" />
     <param name="throttle_timer" value="5" type="int" />
     <param name="threshold" value="0.5" type="double" />
-    <param name="start_enabled " value="false" type="bool" />
-    <param name="start_zoom_enabled " value="false" type="bool" />
+    <param name="start_enabled" value="false" type="bool" />
+    <param name="start_zoom_enabled" value="false" type="bool" />
     <param name="level0_ncrops" value="2" type="int" />
     <param name="level1_xcrops" value="4" type="int" />
     <param name="level1_ycrops" value="2" type="int" />

@@ -27,8 +27,8 @@ class RosMxNetSSD:
         self.timer = self.load_param('~throttle_timer', 5)
         self.latency_threshold_time=self.load_param('~latency_threshold', 2)
         self.threshold = self.load_param('~threshold', 0.5)
-        self.start_enabled = self.load_param('~start_enabled ', False)
-        self.zoom_enabled = self.load_param('~start_zoom_enabled ', False)
+        self.start_enabled = self.load_param('~start_enabled', False)
+        self.zoom_enabled = self.load_param('~start_zoom_enabled', False)
 
         # crop pattern
         self.level0_ncrops = self.load_param('~level0_ncrops',2)
