@@ -28,9 +28,6 @@ class RosMxNetSeg:
         self.enable_gpu = self.load_param('~enable_gpu', True)
         self.network = self.load_param('~network','deeplab_resnet50_ade')
 
-        # Digilabs section
-        self.enable_gpu = False
-
         # Class Variables
         self.run_once = False
         self.frame_counter=0
