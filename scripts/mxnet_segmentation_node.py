@@ -87,7 +87,7 @@ class RosMxNetSegmentation:
                     # produce segmentation (seg) and overlay on the frame
                     frame,seg= self.segmenter.segment(frame)
 
-                    # average frames if specified
+                    # average frames if specified (not enabled at this time)
                     '''
                     if (self.run_once):
                         self.frame_counter=self.frame_counter+1
@@ -109,7 +109,7 @@ class RosMxNetSegmentation:
 
 
 if __name__ == '__main__':
-    rospy.init_node("mxnet_seg_node", anonymous=False, log_level=rospy.INFO)
+    rospy.init_node("rr_mxnet_segmentation", anonymous=False, log_level=rospy.INFO)
     ros_mxnet_segmentation = RosMxNetSegmentation()
     rospy.spin()
 

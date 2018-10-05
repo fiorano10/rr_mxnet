@@ -7,7 +7,7 @@ import mxnet as mx
 
 # MXNet-based single-shot detector 
 class MxNetSSDClassifier(object):
-    def __init__(self, model_directory, model_filename, network_name='resnet50', batch_size=1, gpu_enabled=True, num_classes=20, downsample_size=300):
+    def __init__(self, model_directory, model_filename, network_name='ssd_512_resnet50_v1_coco', batch_size=1, gpu_enabled=True, num_classes=20, downsample_size=512):
         # model settings
         self.prefix = str(model_directory) + '/' + str(model_filename)
         self.num_classes = num_classes

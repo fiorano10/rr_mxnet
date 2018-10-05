@@ -95,6 +95,7 @@ class SSDCropPattern():
                 inds_to_prune_over=np.asarray(np.where(ious>0.01))
                 # find the "best" one and prune the others
                 discard_inds.extend(inds_to_prune_over[np.where(metric[inds_to_prune_over]!=np.max(metric[inds_to_prune_over]))])
+                # TODO identify mergeable overlapping boxes
 
             discard_inds=np.asarray(discard_inds).flatten()
             discard_inds=np.unique(discard_inds)
@@ -229,6 +230,34 @@ class SSDCropPattern():
             framelist.append(np.copy(frame[y1:y2,x1:x2,:]))
 
         return framelist
+
+    def mask_detections(self,detections, mask, overlap):
+        num_detections = len(detections)
+        if (overlap<=0.0 or mask is None):
+            return detections, num_detections
+
+        # if overlap is set, eliminate those with less than overlap percentage with mask==255 values
+        discard_inds=[]
+        for i,det in enumerate(detections):
+            box = det[2:]
+            xmin=int(box[0]*mask.shape[1])
+            ymin=int(box[1]*mask.shape[0])
+            xmax=int(box[2]*mask.shape[1])
+            ymax=int(box[3]*mask.shape[0])
+            maskpct=100.0*np.mean(mask[ymin:ymax, xmin:xmax])/255.0
+            if (maskpct<overlap):
+                #print 'mask below overlap threshold at pct='+str(maskpct)
+                discard_inds.append(i)
+
+        discard_inds=np.asarray(discard_inds).flatten()
+        discard_inds=np.unique(discard_inds)
+        keep_inds=np.asarray(np.setxor1d(range(0,len(detections)),discard_inds),dtype=np.int)
+        if (len(keep_inds)>0):
+            detections=detections[keep_inds]
+        else:
+            detections=[]
+
+        return detections, len(detections)
 
 def convert_frame_to_jpeg_string(frame):
     return np.array(cv2.imencode('.jpg', frame[:,:,[2,1,0]])[1]).tostring()

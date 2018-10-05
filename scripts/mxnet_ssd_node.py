@@ -5,12 +5,11 @@ import time
 import os
 import numpy as np
 from sensor_msgs.msg import Image, CompressedImage
-from std_msgs.msg import String, Bool
+from std_msgs.msg import String, Bool, Int32
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_ssd import MxNetSSDClassifier
 from mxnet_ssd_custom_functions import SSDCropPattern, convert_frame_to_jpeg_string
-#from mxnet_ssd_gluon import MxNetGluonSSDClassifier
 
 class RosMxNetSSD:
 
@@ -37,23 +36,25 @@ class RosMxNetSSD:
         self.level1_crop_size = self.load_param('~level1_crop_size',380)
         
         # location of mxnet model and name, GPU and number of classes
-        self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet_ssd/')
         self.classes = self.load_param('~classes','aeroplane, bicycle, bird, boat, bottle, bus,car, cat, chair, cow, diningtable, dog, horse, motorbike,person, pottedplant, sheep, sofa, train, tvmonitor')
         self.enable_gpu = self.load_param('~enable_gpu', True)
         # recommendation to use self.level0_ncrops in most cases for batch_size
         self.batch_size = self.load_param('~batch_size',1)
         self.network = self.load_param('~network','ssd_512_resnet50_v1_voc')
         self.model_filename = self.load_param('~model_filename','')
-        # if setting a custom model, need to specify the model filename and possibly directory
-        #self.network = 'custom-resnet50_v1'
+        self.model_directory = self.load_param('~model_directory', os.environ['HOME']+'/mxnet_ssd/')
+        # if setting a custom model, need to specify the network will be custom (see below), 
+        # specify the model filename and put model in specified directory
+        #self.network = 'custom-ssd_512_resnet50_v1_custom'
         #self.model_filename = 'ssd_512_resnet50_v1_custom.params'
 
         # save detections output and location
         self.save_detections = self.load_param('~save_detections', False)
         self.save_directory = self.load_param('~save_directory', '/tmp')
 
-        # COMING SOON SECTION
-        #self.mask_topic = self.load_param('~mask_topic', '/img_segmentations')
+        # mask detections
+        self.mask_topic = self.load_param('~mask_topic', '/rr_mxnet_segmentation/segmentation_mask')
+        self.mask_overlap_param = self.load_param('~mask_overlap_param', 0)
 
         # Class Variables
         self.detection_seq = 0
@@ -64,9 +65,10 @@ class RosMxNetSSD:
         self.reported_overlaps=False
         self.data_shape=None
         self.image_counter=0
+        self.mask = None
 
         # SSD classes for handling data/detections
-        self.classifier = MxNetSSDClassifier(self.model_directory, self.model_filename, self.network, self.batch_size, self.enable_gpu, self.num_classes, downsample_size=300)
+        self.classifier = MxNetSSDClassifier(self.model_directory, self.model_filename, self.network, self.batch_size, self.enable_gpu, self.num_classes)
         self.imageprocessor = SSDCropPattern(self.zoom_enabled, self.level0_ncrops, self.level1_xcrops, self.level1_ycrops, self.level1_crop_size)
 
         # ROS Subscribers and variables used in their callbacks
@@ -75,6 +77,8 @@ class RosMxNetSSD:
         self.sub_image = rospy.Subscriber(self.image_topic, Image, self.image_cb, queue_size=1)
         self.sub_enable = rospy.Subscriber('~enable', Bool, self.enable_cb, queue_size=1)
         self.sub_zoom = rospy.Subscriber('~zoom', Bool, self.zoom_cb, queue_size=1)
+        self.sub_mask = rospy.Subscriber(self.mask_topic, Image, self.mask_cb, queue_size=1)
+        self.sub_overlap = rospy.Subscriber('~mask_overlap', Int32, self.overlap_cb, queue_size=1)
 
         # ROS Publishers
         self.pub_detections=rospy.Publisher(self.detections_topic, Detection2DArray, queue_size=10)
@@ -91,6 +95,20 @@ class RosMxNetSSD:
         rospy.loginfo("[MxNet] %s: %s", param, new_param)
         return new_param
 
+    def mask_cb(self, image):
+        rospy.loginfo("Obtaining mask")
+        try:
+            cv2_img = self.bridge.imgmsg_to_cv2(image, "mono8")
+            self.mask=np.asarray(cv2_img).copy()
+            rospy.loginfo("Received mask")
+        except CvBridgeError, e:
+            rospy.logerr(e)
+
+    def overlap_cb(self, msg):
+        overlap = msg.data
+        rospy.loginfo("Setting mask overlap required to %d", overlap)
+        if (overlap >= 0 and overlap <= 100):
+            self.mask_overlap_param = overlap
 
     def enable_cb(self, msg):
         self.start_enabled = msg.data
@@ -170,12 +188,15 @@ class RosMxNetSSD:
                     # decode the detections list for the encoded crop pattern into original image locations
                     decoded_image_detections = self.imageprocessor.decode_crops(list_of_crop_detections)
 
+                    # apply mask (if present) at the desired required overlap percentage
+                    masked_detections, num_detections = self.imageprocessor.mask_detections(decoded_image_detections, self.mask, self.mask_overlap_param)
+
                     # if there are no detections, continue
                     if num_detections==0:
                         return
 
                     # package up the list of detections as a message
-                    detections_msg = self.encode_detection_msg(decoded_image_detections)
+                    detections_msg = self.encode_detection_msg(masked_detections)
 
                     self.pub_detections.publish(detections_msg)
 
@@ -193,7 +214,7 @@ class RosMxNetSSD:
                             msg.data = convert_frame_to_jpeg_string(frame)
                             self.pub_img_compressed_detections.publish(msg)
                         except CvBridgeError as e:
-                            print(e)
+                            rospy.logerr(e)
                     if (self.save_detections):
                         cv2.imwrite(self.save_directory+'/mxnet_detection_%05d.jpg'%(self.detection_seq),frame[:,:,[2,1,0]])
 
@@ -202,7 +223,7 @@ class RosMxNetSSD:
 
 
 if __name__ == '__main__':
-    rospy.init_node("mxnet_ssd_node", anonymous=False, log_level=rospy.INFO)
+    rospy.init_node("rr_mxnet_ssd", anonymous=False, log_level=rospy.INFO)
     ros_mxnet_ssd = RosMxNetSSD()
     rospy.spin()
 
