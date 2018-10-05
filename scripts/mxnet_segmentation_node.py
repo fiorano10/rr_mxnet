@@ -23,7 +23,7 @@ class RosMxNetSegmentation:
         self.avg_segmentation_frames = self.load_param('~avg_segmentation_frames', 1)
         self.overlay_topic = self.load_param('~overlay_topic', '~segmentation_overlay')
         self.mask_topic = self.load_param('~mask_topic', '~segmentation_mask')
-        self.mask_values=self.load_param('~mask_values', '12')
+        self.mask_values=str(self.load_param('~mask_values', '12'))
 
         # mxnet model name, GPU
         self.enable_gpu = self.load_param('~enable_gpu', False)

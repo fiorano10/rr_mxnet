@@ -25,7 +25,6 @@ class SegmentationFunctions():
 
         # reshape back to original
         image=image.reshape((orig_image_size[0],orig_image_size[1],3))
-        #mask=mask.reshape((orig_mask_size[0],orig_mask_size[1]))
         return image
 
     def segmentation_to_mask(self, segmentation):
@@ -38,7 +37,7 @@ class SegmentationFunctions():
             inds = np.where(segmentation==abs(cls))[0]
             mask[inds]=255
 
-        # handle negative values
+        # handle negative values, use last one for detecting if negative
         if (int(abs(cls))==int(-1.0*cls)):
             inds = np.where(mask==0)[0]
             # invert the mask
