@@ -6,7 +6,6 @@ import os
 import numpy as np
 from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import String, Bool
-from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_seg import MxNetSegmentation
 
