@@ -6,9 +6,9 @@ import numpy as np
 from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import String, Bool
 from cv_bridge import CvBridge, CvBridgeError
-from mxnet_seg import MxNetSegmentation
+from mxnet_segmentation import MxNetSegmentation
 
-class RosMxNetSeg:
+class RosMxNetSegmentation:
 
     def __init__(self):
         rospy.logwarn("Initializing")        
@@ -110,6 +110,6 @@ class RosMxNetSeg:
 
 if __name__ == '__main__':
     rospy.init_node("mxnet_seg_node", anonymous=False, log_level=rospy.INFO)
-    ros_mxnet_seg = RosMxNetSeg()
+    ros_mxnet_segmentation = RosMxNetSegmentation()
     rospy.spin()
 
