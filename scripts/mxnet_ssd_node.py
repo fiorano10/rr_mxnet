@@ -10,6 +10,7 @@ from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithP
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_ssd import MxNetSSDClassifier
 from mxnet_ssd_custom_functions import SSDCropPattern, convert_frame_to_jpeg_string
+#from mxnet_ssd_gluon import MxNetGluonSSDClassifier
 
 class RosMxNetSSD:
 

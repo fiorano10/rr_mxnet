@@ -2,54 +2,57 @@
 
 import rospy
 import time
+import os
 import numpy as np
 from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import String, Bool
 from cv_bridge import CvBridge, CvBridgeError
-from mxnet_segmentation import MxNetSegmentation
+from mxnet_seg import MxNetSegmentation
 
-class RosMxNetSegmentation:
+class RosMxNetSeg:
 
     def __init__(self):
         rospy.logwarn("Initializing")        
+        # convert these to subscribed topics
 
         # ROS Parameters
         rospy.loginfo("[MXNET] Loading ROS Parameters")
         self.image_topic = self.load_param('~image_topic', '/usb_cam/image_raw')
-        self.timer = self.load_param('~throttle_timer', 2)
-        self.latency_threshold_time=self.load_param('~latency_threshold', 1)
-        self.run_continuous = self.load_param('~run_continuous ', False)
-        self.avg_segmentation_frames = self.load_param('~avg_segmentation_frames', 1)
-        self.overlay_topic = self.load_param('~overlay_topic', '~segmentation_overlay')
-        self.mask_topic = self.load_param('~mask_topic', '~segmentation_mask')
-        self.mask_values=self.load_param('~mask_values', '12')
+        self.timer = self.load_param('~throttle_timer', 5)
+        self.latency_threshold_time=self.load_param('~latency_threshold', 2)
+        self.start_enabled = self.load_param('~start_enabled ', False)
 
         # mxnet model name, GPU
-        self.enable_gpu = self.load_param('~enable_gpu', False)
+        self.enable_gpu = self.load_param('~enable_gpu', True)
+        self.batch_size = self.load_param('~batch_size',1)
         self.network = self.load_param('~network','deeplab_resnet50_ade')
 
+        # Digilabs section
+        self.batch_size = 1
+        self.enable_gpu = False
+        self.start_enabled = True
+        self.timer = 1
+        self.latency_threshold_time=1
+        self.start_time=time.time()
+
+        self.mask_topic = self.load_param('~mask_topic', '~segmentation')
+
         # Class Variables
-        self.run_once = False
-        self.frame_counter=0
         self.detection_seq = 0
         self.camera_frame = "camera_frame"
-        self.mask_values = [int(c.strip(' ')) for c in self.mask_values.strip('\n').split(',')]
-        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300, mask_values=self.mask_values)
+        self.segmenter = MxNetSegmentation(None, None, self.network, self.batch_size, self.enable_gpu, image_resize=300)
         self.last_detection_time = 0     
         self.reported_overlaps=False
         self.data_shape=None
         self.image_counter=0
 
-        # ROS Subscribers
-        self.start_time=time.time()
         self.bridge = CvBridge()
+        # ROS Subscribers
         self.sub_image = rospy.Subscriber(self.image_topic, Image, self.image_cb, queue_size=1)
-        self.sub_run_once = rospy.Subscriber('~run_once',Bool, self.run_once_cb, queue_size=1)
-        self.sub_run_continuous = rospy.Subscriber('~run_continuous',Bool, self.run_continuous_cb, queue_size=1)
+        self.sub_enable = rospy.Subscriber('~enable', Bool, self.enable_cb, queue_size=1)
 
         # ROS Publishers
-        self.pub_overlay=rospy.Publisher(self.overlay_topic, Image, queue_size=1)
-        self.pub_mask=rospy.Publisher(self.mask_topic, Image, queue_size=1, latch=True)
+        self.pub_img_detections=rospy.Publisher(self.mask_topic, Image, queue_size=1)
 
         rospy.loginfo("[MxNet Initialized with model %s]",self.network)
         
@@ -58,13 +61,9 @@ class RosMxNetSegmentation:
         rospy.loginfo("[MxNet] %s: %s", param, new_param)
         return new_param
 
-    def run_once_cb(self, msg):
-        self.run_once = msg.data
-        rospy.loginfo("MxNet run_once_cb: "+str(self.run_once))
-
-    def run_continuous_cb(self, msg):
-        self.run_continuous = msg.data
-        rospy.loginfo("MxNet run_continuous_cb: "+str(self.run_continuous))
+    def enable_cb(self, msg):
+        self.start_enabled = msg.data
+        rospy.loginfo("MxNet enable_cb: "+str(self.start_enabled))
 
     def image_cb(self, image):
         # check latency and return if more than latency threshold out of date
@@ -73,7 +72,7 @@ class RosMxNetSegmentation:
         if (current_time-image_time>self.latency_threshold_time):
             return
 
-        if self.run_continuous or self.run_once:
+        if self.start_enabled:
             current_time = rospy.get_rostime().secs
             if self.last_detection_time+self.timer <= current_time:
                 self.last_detection_time = current_time
@@ -87,20 +86,10 @@ class RosMxNetSegmentation:
                     # produce segmentation (seg) and overlay on the frame
                     frame,seg= self.segmenter.segment(frame)
 
-                    # average frames if specified (not enabled at this time)
-                    '''
-                    if (self.run_once):
-                        self.frame_counter=self.frame_counter+1
-                        if (self.frame_counter==self.avg_segmentation_frames):
-                            self.run_once = False
-                    '''
-                    self.run_once = False
-
                     # if specified, publish segmented images
                     try:
                         # send uncompressed image
-                        self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
-                        self.pub_mask.publish(self.bridge.cv2_to_imgmsg(seg, "mono8"))
+                        self.pub_img_detections.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
                     except CvBridgeError as e:
                         print(e)
 
@@ -109,7 +98,7 @@ class RosMxNetSegmentation:
 
 
 if __name__ == '__main__':
-    rospy.init_node("rr_mxnet_segmentation", anonymous=False, log_level=rospy.INFO)
-    ros_mxnet_segmentation = RosMxNetSegmentation()
+    rospy.init_node("mxnet_seg_node", anonymous=False, log_level=rospy.INFO)
+    ros_mxnet_seg = RosMxNetSeg()
     rospy.spin()
 
