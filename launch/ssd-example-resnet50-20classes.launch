@@ -6,19 +6,17 @@
     <param name="image_detections_topic" value="~image" />
     <param name="throttle_timer" value="5" type="int" />
     <param name="threshold" value="0.5" type="double" />
-    <param name="start_enabled " value="false" type="bool" />
-    <param name="start_zoom_enabled " value="false" type="bool" />
+    <param name="start_enabled" value="false" type="bool" />
+    <param name="start_zoom_enabled" value="false" type="bool" />
     <param name="level0_ncrops" value="2" type="int" />
     <param name="level1_xcrops" value="4" type="int" />
     <param name="level1_ycrops" value="2" type="int" />
     <param name="level1_crop_size" value="380" type="int" />
-    <param name="model_directory" value="/home/ubuntu/mxnet_ssd/" />
-    <param name="num_classes" value="20" type="int" />
     <param name="enable_gpu" value="true" type="bool" />
+    <param name="classes" value="aeroplane, bicycle, bird, boat, bottle, bus,car, cat, chair, cow, diningtable, dog, horse, motorbike,person, pottedplant, sheep, sofa, train, tvmonitor" />
     <param name="batch_size" value="1" type="int" />
-    <param name="model_name" value="mobilenet-ssd-512" />
-    <param name="model_epoch" value="1" type="int" />
-    <param name="network" value="mobilenet" />
+    <param name="network" value="ssd_512_resnet50_v1_voc" />
+    <param name="model_filename" value="ssd_512_resnet50_v1_voc.params" />
     <param name="save_detections" value="false" type="bool" />
     <param name="save_directory" value="/tmp" />
   </node>

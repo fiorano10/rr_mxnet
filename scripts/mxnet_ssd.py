@@ -7,7 +7,7 @@ import mxnet as mx
 
 # MXNet-based single-shot detector 
 class MxNetSSDClassifier(object):
-    def __init__(self, model_directory, model_filename, network_name='resnet50', batch_size=1, gpu_enabled=True, num_classes=20, downsample_size=300):
+    def __init__(self, model_directory, model_filename, network_name='ssd_512_resnet50_v1_coco', batch_size=1, gpu_enabled=True, num_classes=20, downsample_size=512):
         # model settings
         self.prefix = str(model_directory) + '/' + str(model_filename)
         self.num_classes = num_classes
@@ -23,11 +23,15 @@ class MxNetSSDClassifier(object):
         self._std=(0.229, 0.224, 0.225)
 
         # Create Detector
-        if (self.network_name.find('custom')<0):
-            self.net = gcv.model_zoo.get_model(self.network_name, pretrained=True)
-        elif (self.network_name == 'custom-resnet50_v1'):
-            self.net = gcv.model_zoo.ssd_512_resnet50_v1_custom(classes=[str(i) for i in range(0,num_classes)], transfer='voc')
+        if (self.network_name.find('custom')>=0):
+            classes=[str(i) for i in range(0,num_classes)]
+            self.net = gcv.model_zoo.get_model(self.network_name[len('custom-'):], classes=classes, pretrained_base=False)
+            self.net.reset_class(classes)
             self.net.load_parameters(self.prefix)
+        else:
+            self.net = gcv.model_zoo.get_model(self.network_name, pretrained=True)
+
+        self.net.set_nms(nms_thresh=0.45, nms_topk=400)
         self.batch_data=None
 
     def detect(self, image, threshold):
