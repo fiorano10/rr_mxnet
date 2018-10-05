@@ -7,6 +7,7 @@ from sensor_msgs.msg import Image, CompressedImage
 from std_msgs.msg import String, Bool
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_segmentation import MxNetSegmentation
+from mxnet_segmentation_custom_functions import SegmentationFunctions
 
 class RosMxNetSegmentation:
 
@@ -34,7 +35,8 @@ class RosMxNetSegmentation:
         self.detection_seq = 0
         self.camera_frame = "camera_frame"
         self.mask_values = [int(c.strip(' ')) for c in self.mask_values.strip('\n').split(',')]
-        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300, mask_values=self.mask_values)
+        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
+        self.segmentation_utils = SegmentationFunctions(mask_values=self.mask_values)
         self.last_detection_time = 0     
         self.reported_overlaps=False
         self.data_shape=None
@@ -85,22 +87,19 @@ class RosMxNetSegmentation:
                         rospy.loginfo("Images segmented per second=%.2f", float(self.image_counter)/(time.time() - self.start_time))
 
                     # produce segmentation (seg) and overlay on the frame
-                    frame,seg= self.segmenter.segment(frame)
+                    seg = self.segmenter.segment(frame)
 
-                    # average frames if specified (not enabled at this time)
-                    '''
-                    if (self.run_once):
-                        self.frame_counter=self.frame_counter+1
-                        if (self.frame_counter==self.avg_segmentation_frames):
-                            self.run_once = False
-                    '''
+                    # create the segmentation mask and overlay on the frame
+                    mask = self.segmentation_utils.segmentation_to_mask(seg)
+                    overlay = self.segmentation_utils.overlay_mask(frame, mask, mask_color=[255,0,0],alpha=0.5)
+
                     self.run_once = False
 
                     # if specified, publish segmented images
                     try:
                         # send uncompressed image
-                        self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
-                        self.pub_mask.publish(self.bridge.cv2_to_imgmsg(seg, "mono8"))
+                        self.pub_overlay.publish(self.bridge.cv2_to_imgmsg(overlay, "rgb8"))
+                        self.pub_mask.publish(self.bridge.cv2_to_imgmsg(mask, "mono8"))
                     except CvBridgeError as e:
                         print(e)
 
