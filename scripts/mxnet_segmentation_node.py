@@ -25,7 +25,7 @@ class RosMxNetSegmentation:
         self.mask_values=self.load_param('~mask_values', '12')
 
         # mxnet model name, GPU
-        self.enable_gpu = self.load_param('~enable_gpu', True)
+        self.enable_gpu = self.load_param('~enable_gpu', False)
         self.network = self.load_param('~network','deeplab_resnet50_ade')
 
         # Class Variables
