@@ -262,3 +262,6 @@ class SSDCropPattern():
 def convert_frame_to_jpeg_string(frame):
     return np.array(cv2.imencode('.jpg', frame[:,:,[2,1,0]])[1]).tostring()
 
+def write_image_detection(filename, image):
+    cv2.imwrite(filename, image)
+

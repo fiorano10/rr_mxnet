@@ -9,14 +9,11 @@ from std_msgs.msg import String, Bool, Int32
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_ssd import MxNetSSDClassifier
-from mxnet_ssd_custom_functions import SSDCropPattern, convert_frame_to_jpeg_string
-#from mxnet_ssd_gluon import MxNetGluonSSDClassifier
+from mxnet_ssd_custom_functions import SSDCropPattern, convert_frame_to_jpeg_string, write_image_detection
 
 class RosMxNetSSD:
-
     def __init__(self):
         rospy.logwarn("Initializing")        
-        # convert these to subscribed topics
 
         # ROS Parameters
         rospy.loginfo("[MXNET] Loading ROS Parameters")
@@ -116,8 +113,8 @@ class RosMxNetSSD:
         rospy.loginfo("MxNet enable_cb: "+str(self.start_enabled))
 
     def zoom_cb(self, msg):
-        # Note: set_zoom is safe, it doesn't take effect until the count of encoded and decoded are equal
-        # this was added to the custom functions b/c otherwise could try to decode a pattern that changed when the zoom parameter changed on the fly
+        # set_zoom is safe, it doesn't take effect until the count of encoded and decoded are equal
+        # allows the zoom setting to be changed on the fly
         self.zoom_enabled = msg.data
         self.imageprocessor.set_zoom(self.zoom_enabled)
         rospy.loginfo("MxNet zoom_cb: "+str(self.zoom_enabled))
@@ -217,7 +214,7 @@ class RosMxNetSSD:
                         except CvBridgeError as e:
                             rospy.logerr(e)
                     if (self.save_detections):
-                        cv2.imwrite(self.save_directory+'/mxnet_detection_%05d.jpg'%(self.detection_seq),frame[:,:,[2,1,0]])
+                        write_image_detection(self.save_directory+'/mxnet_detection_%05d.jpg'%(self.detection_seq),frame[:,:,[2,1,0]])
 
                 except CvBridgeError, e:
                     rospy.logerr(e)
