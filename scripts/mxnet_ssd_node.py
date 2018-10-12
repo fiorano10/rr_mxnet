@@ -10,6 +10,7 @@ from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithP
 from cv_bridge import CvBridge, CvBridgeError
 from mxnet_ssd import MxNetSSDClassifier
 from mxnet_ssd_custom_functions import SSDCropPattern, convert_frame_to_jpeg_string, write_image_detection
+from datetime import datetime
 
 class RosMxNetSSD:
     def __init__(self):
@@ -49,6 +50,8 @@ class RosMxNetSSD:
         # save detections output and location
         self.save_detections = self.load_param('~save_detections', False)
         self.save_directory = self.load_param('~save_directory', '/tmp')
+        # use some unique value, e.g. hostname or other
+        self.save_prefix = self.load_param('~save_prefix', 'detector')
 
         # mask detections
         self.mask_topic = self.load_param('~mask_topic', '/rr_mxnet_segmentation/segmentation_mask')
@@ -193,9 +196,8 @@ class RosMxNetSSD:
                     if num_detections==0:
                         return
 
-                    # package up the list of detections as a message
+                    # package up the list of detections as a message and publish
                     detections_msg = self.encode_detection_msg(masked_detections)
-
                     self.pub_detections.publish(detections_msg)
 
                     # if specified, publish images with bounding boxes if detections present
@@ -213,8 +215,11 @@ class RosMxNetSSD:
                             self.pub_img_compressed_detections.publish(msg)
                         except CvBridgeError as e:
                             rospy.logerr(e)
+
+                    # save image file with some unique prefix and timestamp
                     if (self.save_detections):
-                        write_image_detection(self.save_directory+'/mxnet_detection_%05d.jpg'%(self.detection_seq),frame[:,:,[2,1,0]])
+                        timestamp=datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        write_image_detection(self.save_directory+'/'+self.save_prefix+'_'+timestamp+'_mxdet_%05d.jpg'%(self.detection_seq),frame[:,:,[2,1,0]])
 
                 except CvBridgeError, e:
                     rospy.logerr(e)
