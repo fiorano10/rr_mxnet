@@ -32,6 +32,7 @@ class MxNetSSDClassifier(object):
             self.net = gcv.model_zoo.get_model(self.network_name, pretrained=True)
 
         self.net.set_nms(nms_thresh=0.45, nms_topk=400)
+        self.net.collect_params().reset_ctx(self.ctx)
         self.batch_data=None
 
     def detect(self, image, threshold):
@@ -43,12 +44,13 @@ class MxNetSSDClassifier(object):
         orig_image_size=image[0].shape[1]
         # set image_size to that specified on command line
         image_size=self.image_size
-        if (self.batch_data is None):
-            self.batch_data=mx.ndarray.zeros((self.batch_size,3,image_size,image_size))
+        #if (self.batch_data is None):
+        #    self.batch_data=mx.ndarray.zeros((self.batch_size,3,image_size,image_size))
 
         # pack list of images into batch size as appropriate
         num_loops = int(np.ceil(len(image)/float(self.batch_size)))
         for i in range(0,num_loops):
+            self.batch_data=mx.ndarray.zeros((self.batch_size,3,image_size,image_size))
             start_ind=i*self.batch_size
             stop_ind=min((i+1)*self.batch_size,len(image))
             for j in range(start_ind,stop_ind):
@@ -60,6 +62,7 @@ class MxNetSSDClassifier(object):
                 data = mx.nd.image.normalize(data, mean=self._mean, std=self._std)
                 self.batch_data[j-start_ind,:,:,:]=data
             
+            self.batch_data = self.batch_data.as_in_context(self.ctx)
             ids, scores, bboxes = [xx.asnumpy() for xx in self.net(self.batch_data)]
 
             # loop over batch
