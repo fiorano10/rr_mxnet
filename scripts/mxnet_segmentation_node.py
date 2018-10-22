@@ -35,12 +35,14 @@ class RosMxNetSegmentation:
         self.detection_seq = 0
         self.camera_frame = "camera_frame"
         self.mask_values = [int(c.strip(' ')) for c in self.mask_values.strip('\n').split(',')]
-        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
         self.segmentation_utils = SegmentationFunctions(mask_values=self.mask_values)
         self.last_detection_time = 0     
         self.reported_overlaps=False
         self.data_shape=None
         self.image_counter=0
+        self.segmenter=None
+        if (self.run_continuous):
+            self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
 
         # ROS Subscribers
         self.start_time=time.time()
@@ -61,11 +63,22 @@ class RosMxNetSegmentation:
         return new_param
 
     def run_once_cb(self, msg):
-        self.run_once = msg.data
+        if (type(msg)==type(True)):
+            self.run_once = msg
+        else:
+            self.run_once = msg.data
         rospy.loginfo("MxNet run_once_cb: "+str(self.run_once))
 
     def run_continuous_cb(self, msg):
-        self.run_continuous = msg.data
+        if (type(msg)==type(True)):
+            temp_run_continuous = msg
+        else:
+            temp_run_continuous = msg.data
+        # if changed from continuous to non-continuous mode, release the memory
+        if (self.run_continuous is True and temp_run_continuous is False):
+            del self.segmenter
+            self.segmenter = None
+        self.run_continuous = temp_run_continuous
         rospy.loginfo("MxNet run_continuous_cb: "+str(self.run_continuous))
 
     def image_cb(self, image):
@@ -87,7 +100,13 @@ class RosMxNetSegmentation:
                         rospy.loginfo("Images segmented per second=%.2f", float(self.image_counter)/(time.time() - self.start_time))
 
                     # produce segmentation (seg) and overlay on the frame
-                    seg = self.segmenter.segment(frame)
+                    if (self.run_continuous):
+                        seg = self.segmenter.segment(frame)
+                    else:
+                        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
+                        seg = self.segmenter.segment(frame)
+                        del self.segmenter
+                        self.segmenter = None
 
                     # create the segmentation mask and overlay on the frame
                     mask = self.segmentation_utils.segmentation_to_mask(seg)

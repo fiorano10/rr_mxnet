@@ -57,6 +57,23 @@ class RosMxNetSSD:
         self.mask_topic = self.load_param('~mask_topic', '/rr_mxnet_segmentation/segmentation_mask')
         self.mask_overlap_param = self.load_param('~mask_overlap_param', 0)
 
+        # Digilabs section
+        #self.batch_size = 4
+        self.classes = 'goose, person, golfcart, lawncare, dog'
+        self.network = 'custom-ssd_512_resnet50_v1_custom'
+        self.model_filename = 'ssd_512_resnet50_v1_goose_best.params'
+        #self.network = 'yolo3_darknet53_coco'
+        #self.network = 'custom-yolo3_darknet53_custom'
+        #self.model_filename = 'yolo3_darknet53_goose_0040_0.8519.params'
+        self.level0_ncrops = 2
+        self.enable_gpu = False
+        self.start_enabled = True
+        self.publish_detection_images = True
+        self.timer = 1
+        self.latency_threshold_time=1
+        self.mask_overlap_param = 50
+
+
         # Class Variables
         self.detection_seq = 0
         self.camera_frame = "camera_frame"
@@ -112,13 +129,17 @@ class RosMxNetSSD:
             self.mask_overlap_param = overlap
 
     def enable_cb(self, msg):
-        self.start_enabled = msg.data
+        if (type(msg)==type(True)):
+            self.start_enabled = msg
+        else:
+            self.start_enabled = msg.data
         rospy.loginfo("MxNet enable_cb: "+str(self.start_enabled))
 
     def zoom_cb(self, msg):
-        # set_zoom is safe, it doesn't take effect until the count of encoded and decoded are equal
-        # allows the zoom setting to be changed on the fly
-        self.zoom_enabled = msg.data
+        if (type(msg)==type(True)):
+            self.zoom_enabled = msg
+        else:
+            self.zoom_enabled = msg.data
         self.imageprocessor.set_zoom(self.zoom_enabled)
         rospy.loginfo("MxNet zoom_cb: "+str(self.zoom_enabled))
 
