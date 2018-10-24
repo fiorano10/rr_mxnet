@@ -26,7 +26,7 @@ class MxNetSegmentation(object):
         self._std=(0.229, 0.224, 0.225)
 
         # Create Detector
-        self.net = gcv.model_zoo.get_model(self.network_name, pretrained=True)
+        self.net = gcv.model_zoo.get_model(self.network_name, pretrained=True, ctx=self.ctx)
 
     def segment(self, image):
         orig_image_size=image.shape

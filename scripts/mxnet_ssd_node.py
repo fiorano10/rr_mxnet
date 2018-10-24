@@ -58,6 +58,7 @@ class RosMxNetSSD:
         self.mask_overlap_param = self.load_param('~mask_overlap_param', 0)
 
         # Digilabs section
+        '''
         #self.batch_size = 4
         self.classes = 'goose, person, golfcart, lawncare, dog'
         self.network = 'custom-ssd_512_resnet50_v1_custom'
@@ -72,7 +73,7 @@ class RosMxNetSSD:
         self.timer = 1
         self.latency_threshold_time=1
         self.mask_overlap_param = 50
-
+        '''
 
         # Class Variables
         self.detection_seq = 0

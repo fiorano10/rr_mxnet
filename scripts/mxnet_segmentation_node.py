@@ -41,8 +41,11 @@ class RosMxNetSegmentation:
         self.data_shape=None
         self.image_counter=0
         self.segmenter=None
-        if (self.run_continuous):
-            self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
+        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
+        # doesn't fully release memory, if we find we need to free up more RAM, just kill this script and 
+        # restart everytime we need a fresh one (note: the latched mask might die too)
+        #if (self.run_continuous):
+        #    self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
 
         # ROS Subscribers
         self.start_time=time.time()
@@ -75,9 +78,11 @@ class RosMxNetSegmentation:
         else:
             temp_run_continuous = msg.data
         # if changed from continuous to non-continuous mode, release the memory
+        '''
         if (self.run_continuous is True and temp_run_continuous is False):
             del self.segmenter
             self.segmenter = None
+        '''
         self.run_continuous = temp_run_continuous
         rospy.loginfo("MxNet run_continuous_cb: "+str(self.run_continuous))
 
@@ -100,6 +105,7 @@ class RosMxNetSegmentation:
                         rospy.loginfo("Images segmented per second=%.2f", float(self.image_counter)/(time.time() - self.start_time))
 
                     # produce segmentation (seg) and overlay on the frame
+                    '''
                     if (self.run_continuous):
                         seg = self.segmenter.segment(frame)
                     else:
@@ -107,6 +113,8 @@ class RosMxNetSegmentation:
                         seg = self.segmenter.segment(frame)
                         del self.segmenter
                         self.segmenter = None
+                    '''
+                    seg = self.segmenter.segment(frame)
 
                     # create the segmentation mask and overlay on the frame
                     mask = self.segmentation_utils.segmentation_to_mask(seg)
