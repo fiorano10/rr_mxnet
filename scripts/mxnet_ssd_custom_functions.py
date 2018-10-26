@@ -213,10 +213,6 @@ class SSDCropPattern():
 
         # make the list of crops
         framelist=[]
-        # If level0_ncrops==0, resize to square and return
-        if (self.level0_ncrops==0):
-            framelist.append(cv2.resize(np.copy(frame),(min_dim,min_dim)))
-            return framelist
 
         # otherwise, get the crop indices, loop over the crop indices and add a copy of each crop to framelist
         pct_indices,_,_,_=self.get_crop_location_pcts(report_overlaps=False)

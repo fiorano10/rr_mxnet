@@ -26,16 +26,15 @@ class MxNetSSDClassifier(object):
         if (self.network_name.find('custom')>=0):
             classes=[str(i) for i in range(0,num_classes)]
             self.net = gcv.model_zoo.get_model(self.network_name[len('custom-'):], classes=classes, pretrained_base=False, ctx=self.ctx)
+            self.net.reset_class(classes)
             # doing the init on the gpu context here, then loading params directly onto gpu-contextified params reduces memory from 2GB to 1.85GB
             self.net.initialize(ctx=self.ctx)
-            self.net.reset_class(classes)
             self.net.collect_params().reset_ctx(self.ctx)
             self.net.load_parameters(self.prefix, ctx=self.ctx)
         else:
-            self.net = gcv.model_zoo.get_model(self.network_name, pretrained=True)
+            self.net = gcv.model_zoo.get_model(self.network_name, pretrained=True, ctx=self.ctx)
 
         self.net.set_nms(nms_thresh=0.45, nms_topk=400)
-        #self.net.collect_params().reset_ctx(self.ctx)
         self.batch_data=None
 
     def detect(self, image, threshold):
