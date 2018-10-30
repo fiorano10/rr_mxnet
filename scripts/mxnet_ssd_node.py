@@ -27,6 +27,7 @@ class RosMxNetSSD:
         self.threshold = self.load_param('~threshold', 0.5)
         self.start_enabled = self.load_param('~start_enabled', False)
         self.zoom_enabled = self.load_param('~start_zoom_enabled', False)
+        self.camera_frame = self.load_param('~camera_frame','ssd_detector_frame')
 
         # crop pattern
         self.level0_ncrops = self.load_param('~level0_ncrops',2)
@@ -57,27 +58,8 @@ class RosMxNetSSD:
         self.mask_topic = self.load_param('~mask_topic', '/rr_mxnet_segmentation/segmentation_mask')
         self.mask_overlap_param = self.load_param('~mask_overlap_param', 0)
 
-        # Digilabs section
-        '''
-        #self.batch_size = 4
-        self.classes = 'goose, person, golfcart, lawncare, dog'
-        self.network = 'custom-ssd_512_resnet50_v1_custom'
-        self.model_filename = 'ssd_512_resnet50_v1_goose_best.params'
-        #self.network = 'yolo3_darknet53_coco'
-        #self.network = 'custom-yolo3_darknet53_custom'
-        #self.model_filename = 'yolo3_darknet53_goose_0040_0.8519.params'
-        self.level0_ncrops = 2
-        self.enable_gpu = False
-        self.start_enabled = True
-        self.publish_detection_images = True
-        self.timer = 1
-        self.latency_threshold_time=1
-        self.mask_overlap_param = 50
-        '''
-
         # Class Variables
         self.detection_seq = 0
-        self.camera_frame = "camera_frame"
         self.classes = [c.strip(' ') for c in self.classes.strip('\n').split(',')]
         self.num_classes= len(self.classes)
         self.last_detection_time = 0     
@@ -144,16 +126,26 @@ class RosMxNetSSD:
         self.imageprocessor.set_zoom(self.zoom_enabled)
         rospy.loginfo("MxNet zoom_cb: "+str(self.zoom_enabled))
 
-    def encode_detection_msg(self,detections):
+    def encode_detection_msg(self,detections, detector_frame_id, camera_msg):
         detections_msg = Detection2DArray()
+        detections_msg.header.seq = self.detection_seq
+        detections_msg.header.stamp = rospy.Time.now()
+        detections_msg.header.frame_id = detector_frame_id
         if (len(detections)>0):
             i=0
             detstring='Detected:'
-            for det in detections:
+            for detnum in range(0,len(detections)):
+                det = detections[detnum]
                 detection = Detection2D()
-                detection.header.seq = self.detection_seq
+                detection.source_img.header = camera_msg.header
+                detection.source_img.width = camera_msg.width
+                detection.source_img.height = camera_msg.height
+                detection.source_img.step = camera_msg.step
+                detection.source_img.encoding = camera_msg.encoding
+                detection.source_img.is_bigendian = camera_msg.is_bigendian
+                detection.header.seq = detnum
                 detection.header.stamp = rospy.Time.now()
-                detection.header.frame_id = self.camera_frame
+                detection.header.frame_id = detector_frame_id
                 result = [ObjectHypothesisWithPose()]
                 result[0].id = det[0]
                 result[0].score = det[1]
@@ -219,7 +211,7 @@ class RosMxNetSSD:
                         return
 
                     # package up the list of detections as a message and publish
-                    detections_msg = self.encode_detection_msg(masked_detections)
+                    detections_msg = self.encode_detection_msg(masked_detections, self.camera_frame, image)
                     self.pub_detections.publish(detections_msg)
 
                     # if specified, publish images with bounding boxes if detections present
