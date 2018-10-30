@@ -83,19 +83,29 @@ class SSDCropPattern():
         if (len(all_detections)>0):
             areas=(all_detections[:,4]-all_detections[:,2])*(all_detections[:,5]-all_detections[:,3])
             probs=all_detections[:,1]
+            # area computed from image percentages, same scale as probability squared meaning we treat them equally important
             metric=areas*probs*probs
             discard_inds=[]
             for i in range(0,len(all_detections)):
-                # get overlap between each box here and all other boxes
+                # get overlap between each box here and all other boxes (multiply by 1000 for pixel pcts - output is the same)
                 ious=self.iou(1000.0*all_detections[i,2:],1000.0*all_detections[:,2:])
                 # check if the class matches for the overlapping boxes
-                # if different class, set the iou to zero so we keep them both
+                # if different class, set their ious to zero so we keep them both
                 ious[np.where(all_detections[:,0] != all_detections[i,0])]=0.0
-                # take only those with IOU greater than 1%
-                inds_to_prune_over=np.asarray(np.where(ious>0.01))
+                # take only those with IOU greater than threshold
+                overlap_inds=np.asarray(np.where(ious>0.10))
                 # find the "best" one and prune the others
-                discard_inds.extend(inds_to_prune_over[np.where(metric[inds_to_prune_over]!=np.max(metric[inds_to_prune_over]))])
-                # TODO identify mergeable overlapping boxes
+                best_ind=overlap_inds[np.where(metric[overlap_inds]==np.max(metric[overlap_inds]))]
+                zero_inds=overlap_inds[np.where(metric[overlap_inds]!=np.max(metric[overlap_inds]))]
+                discard_inds.extend(zero_inds)
+                # these are potentially mergeable overlapping boxes
+                # modify the max index (the one we are keeping) to cover all the underlying mergeable boxes
+                all_detections[best_ind,2:]=[np.min(all_detections[overlap_inds,2]), 
+                                             np.min(all_detections[overlap_inds,3]), 
+                                             np.max(all_detections[overlap_inds,4]), 
+                                             np.max(all_detections[overlap_inds,5])]
+                # and finally zero out all the detections on those others (so we don't re-merge on subsequent iterations)
+                # not necessary, we're just discarding them below (on subsequent iters the max metric will always be the biggest box)
 
             discard_inds=np.asarray(discard_inds).flatten()
             discard_inds=np.unique(discard_inds)
@@ -127,7 +137,7 @@ class SSDCropPattern():
                 all_detections[i][j,4]=all_detections[i][j,4]*w + x1
                 all_detections[i][j,5]=all_detections[i][j,5]*h + y1
 
-        # prune overlapping boxes with same class id
+        # merge/prune overlapping boxes with same class id
         all_detections=self.prune_overlapping_boxes(all_detections)
 
         # decrement the encode_decode back to zero
