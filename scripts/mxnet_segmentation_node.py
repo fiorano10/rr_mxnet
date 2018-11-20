@@ -24,6 +24,8 @@ class RosMxNetSegmentation:
         self.overlay_topic = self.load_param('~overlay_topic', '~segmentation_overlay')
         self.mask_topic = self.load_param('~mask_topic', '~segmentation_mask')
         self.mask_values=str(self.load_param('~mask_values', '12'))
+        # resize should ideally be in multiples of 32, from 2-10 they are: 64, 96, 128, 160, 192, 224, 256, 288, 320
+        self.image_resize = self.load_param('~image_resize', 256)
 
         # mxnet model name, GPU
         self.enable_gpu = self.load_param('~enable_gpu', False)
@@ -41,7 +43,7 @@ class RosMxNetSegmentation:
         self.data_shape=None
         self.image_counter=0
         self.segmenter=None
-        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=300)
+        self.segmenter = MxNetSegmentation(None, None, self.network, self.enable_gpu, image_resize=self.image_resize)
         # doesn't fully release memory, if we find we need to free up more RAM, just kill this script and 
         # restart everytime we need a fresh one (note: the latched mask might die too)
         #if (self.run_continuous):

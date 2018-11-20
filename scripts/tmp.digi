@@ -1,0 +1,63 @@
+
+        # multiples of 32: (from 2-8) 64, 96, 128, 160, 192, 224, 256, liking 160 or so - make this into a rosparam
+        # Digilabs section
+        self.enable_gpu = True
+        self.start_enabled = True
+        self.timer = 0
+        self.latency_threshold_time=1
+        self.run_continuous = True
+
+segnet
+        # Digilabs section
+        self.enable_gpu = True
+        self.start_enabled = True
+        self.timer = 0
+        self.latency_threshold_time=1
+        self.run_continuous = True
+
+ssd
+        # Digilabs section
+        #self.network = 'yolo3_darknet53_coco'
+        self.classes = 'goose, person, golfcart, lawncare, dog'
+        self.network = 'custom-ssd_512_resnet50_v1_custom'
+        self.model_filename = 'ssd_512_resnet50_v1_goose_best.params'
+        self.network = 'custom-yolo3_darknet53_custom'
+        self.model_filename = 'yolo3_darknet53_goose_0040_0.8519.params'
+        self.level0_ncrops = 2
+        self.batch_size = 2
+        self.zoom_enabled = True
+        self.zoom_enabled = False
+        # bottom line: yolo is another ~20% distance at least and seems to have fewer false pos
+        # consistently detect 1 or 2 geese at 45 feet indoors with elp camera with yolo and 2x4 380x380 crops upsampled to 512x512
+        self.level1_xcrops = 4
+        self.level1_ycrops = 2
+        self.enable_gpu = True
+        self.start_enabled = True
+        self.publish_detection_images = True
+        self.timer = 0
+        self.latency_threshold_time=1
+        self.mask_overlap_param = 50
+
+        # Digilabs section
+        #self.network = 'yolo3_darknet53_coco'
+        self.classes = 'goose, person, golfcart, lawncare, dog'
+        self.network = 'custom-ssd_512_resnet50_v1_custom'
+        self.model_filename = 'ssd_512_resnet50_v1_goose_best.params'
+        self.network = 'custom-yolo3_darknet53_custom'
+        self.model_filename = 'yolo3_darknet53_goose_0040_0.8519.params'
+        self.level0_ncrops = 2
+        self.batch_size = 2
+        self.zoom_enabled = False
+        self.batch_size = 10
+        self.zoom_enabled = True
+        # bottom line: yolo is another ~20% distance at least and seems to have fewer false pos
+        # consistently detect 1 or 2 geese at 45 feet indoors with elp camera with yolo and 2x4 380x380 crops upsampled to 512x512
+        self.level1_xcrops = 4
+        self.level1_ycrops = 2
+        self.enable_gpu = True
+        self.start_enabled = True
+        self.publish_detection_images = True
+        self.timer = 0
+        self.latency_threshold_time=1
+        self.mask_overlap_param = 50
+
