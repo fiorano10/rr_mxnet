@@ -1,0 +1,40 @@
+<launch>
+  <node name="rr_mxnet_segmentation" pkg="rr_mxnet" type="mxnet_segmentation_node.py" output="screen" >
+    <param name="image_topic" value="/usb_cam_front/image" />
+    <param name="mask_topic" value="~segmentation_mask" />
+    <param name="overlay_topic" value="~segmentation_overlay" />
+    <param name="enable_gpu" value="false" type="bool" />
+    <param name="run_continuous" value="false" type="bool" />
+    <param name="mask_values" value="12" type="str" />
+    <param name="throttle_timer" value="5" type="int" />
+    <param name="latency_threshold" value="2" type="int" />
+    <param name="network" value="deeplab_resnet50_ade" />
+  </node>
+    <node name="rr_mxnet_ssd" pkg="rr_mxnet" type="mxnet_ssd_node.py" output="screen" >
+      <param name="image_topic" value="/usb_cam_front/image" />
+      <param name="mask_topic" value="/rr_mxnet_segmentation/segmentation_mask" />
+      <param name="detections_topic" value="~detections" />
+      <param name="publish_detection_images" value="true" type="bool" />
+      <param name="image_detections_topic" value="~image" />
+      <param name="throttle_timer" value="5" type="int" />
+      <param name="threshold" value="0.35" type="double" />
+      <param name="latency_threshold" value="1" type="int" />
+      <param name="start_enabled" value="false" type="bool" />
+      <param name="start_zoom_enabled" value="false" type="bool" />
+      <param name="level0_ncrops" value="2" type="int" />
+      <param name="level1_xcrops" value="4" type="int" />
+      <param name="level1_ycrops" value="2" type="int" />
+      <param name="level1_crop_size" value="380" type="int" />
+      <param name="model_directory" value="/home/ubuntu/mxnet_ssd/" />
+      <param name="classes" value="goose, person, golfcart, lawncare, dog" />
+      <param name="enable_gpu" value="true" type="bool" />
+      <param name="batch_size" value="2" type="int" />
+      <param name="model_filename" value="goosenet_v0_2_1.params" />
+      <param name="network" value="custom-ssd_512_resnet50_v1_custom" />
+      <param name="save_detections" value="true" type="bool" />
+      <param name="save_directory" value="/tmp" />
+    </node>
+<!--
+-->
+</launch>
+
